@@ -30,8 +30,16 @@ deutscher Erzähltext) und "diceRequest" (Objekt {reason, hint} oder null).
 export function historyToMessages(
   history: Turn[],
 ): { role: "user" | "assistant"; content: string }[] {
-  return history.map((t) => ({
-    role: t.role === "gm" ? "assistant" : "user",
+  const messages = history.map((t) => ({
+    role: (t.role === "gm" ? "assistant" : "user") as "user" | "assistant",
     content: t.text,
   }));
+  // The Anthropic/Bedrock Messages API requires the first message to have role
+  // "user". Sessions seed history with the opening narration as a gm turn, which
+  // maps to a leading assistant message. Drop leading assistant turns — the
+  // opening's context is already supplied via SCENE_BRIEF in the system prompt.
+  while (messages[0]?.role === "assistant") {
+    messages.shift();
+  }
+  return messages;
 }

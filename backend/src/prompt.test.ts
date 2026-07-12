@@ -13,14 +13,38 @@ describe("buildSystemPrompt", () => {
 });
 
 describe("historyToMessages", () => {
-  it("maps gm turns to assistant and player turns to user", () => {
+  it("maps interior gm turns to assistant and player turns to user", () => {
     const msgs = historyToMessages([
       { role: "gm", text: "Ihr steht vor der Höhle." },
       { role: "player", text: "Ich schleiche hinein." },
+      { role: "gm", text: "Es ist dunkel." },
     ]);
+    // Leading opening (gm) is dropped; interior gm stays assistant.
     expect(msgs).toEqual([
-      { role: "assistant", content: "Ihr steht vor der Höhle." },
       { role: "user", content: "Ich schleiche hinein." },
+      { role: "assistant", content: "Es ist dunkel." },
+    ]);
+  });
+
+  it("returns an array beginning with a user message when history starts with a gm (opening) turn", () => {
+    const result = historyToMessages([
+      { role: "gm", text: "Ihr steht vor der Höhle." },
+      { role: "player", text: "Ich schleiche hinein." },
+    ]);
+    expect(result[0].role).toBe("user");
+  });
+
+  it("drops leading opening, preserves interior gm and order for a multi-turn history", () => {
+    const result = historyToMessages([
+      { role: "gm", text: "opening" },
+      { role: "player", text: "a" },
+      { role: "gm", text: "b" },
+      { role: "player", text: "c" },
+    ]);
+    expect(result).toEqual([
+      { role: "user", content: "a" },
+      { role: "assistant", content: "b" },
+      { role: "user", content: "c" },
     ]);
   });
 });
