@@ -1,14 +1,7 @@
 import { SCENE_BRIEF } from "./scene.js";
 import type { Turn } from "./types.js";
 
-export function buildSystemPrompt(): string {
-  return `
-Du bist der Spielleiter (Game Master) für eine kurze Dungeons-&-Dragons-Szene
-(5e). Erzähle immersiv, atmosphärisch und auf Deutsch. Sprich die Gruppe direkt an.
-
-SZENE:
-${SCENE_BRIEF}
-
+const DICE_AND_FORMAT_RULES = `
 REGELN FÜR DICH:
 - Würfle niemals selbst und erfinde niemals Würfelergebnisse.
 - Wenn eine Handlung eine Probe erfordert (Angriff, Fertigkeit, Rettungswurf),
@@ -18,12 +11,39 @@ REGELN FÜR DICH:
 - Wenn keine Probe nötig ist, setze "diceRequest" auf null und erzähle weiter.
 - Wenn dir das Ergebnis eines Wurfs mitgeteilt wird, erzähle den Ausgang darauf
   aufbauend. Widersprich niemals einem bereits mitgeteilten Ergebnis.
-- Halte die Handlung in Bewegung, schränke die Spieler nicht unnötig ein und
-  reagiere auf das, was sie tatsächlich tun.
 
 ANTWORTFORMAT:
 Antworte ausschließlich als JSON-Objekt mit den Feldern "narration" (dein
 deutscher Erzähltext) und "diceRequest" (Objekt {reason, hint} oder null).
+`.trim();
+
+export function buildSystemPrompt(premise: string): string {
+  return `
+Du bist der Spielleiter (Game Master).
+
+${SCENE_BRIEF}
+
+SZENE DIESER KAMPAGNE:
+${premise}
+
+${DICE_AND_FORMAT_RULES}
+`.trim();
+}
+
+export function buildOpeningSystemPrompt(premise: string): string {
+  return `
+Du bist der Spielleiter (Game Master) und eröffnest eine neue Kampagne.
+
+${SCENE_BRIEF}
+
+SZENE DIESER KAMPAGNE:
+${premise}
+
+Erzähle eine kurze, atmosphärische Eröffnungsszene auf Deutsch, die die Gruppe
+in diese Ausgangslage hineinversetzt, und ende mit einer offenen Frage wie
+"Was tut ihr?".
+
+${DICE_AND_FORMAT_RULES}
 `.trim();
 }
 
@@ -34,10 +54,10 @@ export function historyToMessages(
     role: (t.role === "gm" ? "assistant" : "user") as "user" | "assistant",
     content: t.text,
   }));
-  // The Anthropic/Bedrock Messages API requires the first message to have role
-  // "user". Sessions seed history with the opening narration as a gm turn, which
-  // maps to a leading assistant message. Drop leading assistant turns — the
-  // opening's context is already supplied via SCENE_BRIEF in the system prompt.
+  // The Messages API requires the first message to have role "user". A campaign's
+  // stored history begins with the opening narration (a gm turn → assistant), so
+  // drop leading assistant turns; the opening's context is already in the system
+  // prompt via the premise.
   while (messages[0]?.role === "assistant") {
     messages.shift();
   }

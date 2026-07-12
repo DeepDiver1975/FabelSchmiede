@@ -4,5 +4,7 @@ dist/
 .env.*
 !.env.example
 docs/superpowers/
+.superpowers/
+data/
 *.log
 .DS_Store
