@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import { generateGmReply } from "./gmEngine.js";
-import type { Turn } from "./types.js";
+import { generateGmReply, generateStory } from "./gmEngine.js";
+import type { Turn, StoredTurn } from "./types.js";
 
 const history: Turn[] = [{ role: "player", text: "Ich gehe hinein." }];
 
@@ -35,5 +35,34 @@ describe("generateGmReply", () => {
     expect(arg.system).toContain("Spielleiter");
     expect(arg.schema).toBeDefined();
     expect(arg.messages).toEqual([{ role: "user", content: "Ich gehe hinein." }]);
+  });
+});
+
+describe("generateStory", () => {
+  const turns: StoredTurn[] = [
+    { role: "gm", text: "Ihr steht am Eingang.", diceRequest: null },
+    { role: "player", text: "Ich gehe hinein.", diceRequest: null },
+  ];
+  const campaign = { name: "Die Höhle", premise: "Goblins" };
+
+  it("returns the model's markdown verbatim (no JSON parsing)", async () => {
+    const call = vi.fn().mockResolvedValue("# Die Höhle\n\nEs war einmal…");
+    const md = await generateStory(turns, campaign, call);
+    expect(md).toBe("# Die Höhle\n\nEs war einmal…");
+    expect(call).toHaveBeenCalledTimes(1);
+  });
+
+  it("passes the story system prompt and the transcript as a user message", async () => {
+    const call = vi.fn().mockResolvedValue("# x\n\ny");
+    await generateStory(turns, campaign, call);
+    const arg = call.mock.calls[0][0];
+    expect(arg.system).toContain("Kurzgeschichte");
+    expect(arg.messages).toEqual([
+      { role: "user", content: "SPIELLEITER: Ihr steht am Eingang.\n\nSPIELER: Ich gehe hinein." },
+    ]);
+  });
+
+  it("throws on an empty or whitespace-only response", async () => {
+    await expect(generateStory(turns, campaign, vi.fn().mockResolvedValue("   "))).rejects.toThrow();
   });
 });
