@@ -6,10 +6,33 @@ function isDiceRequest(v: unknown): v is DiceRequest {
   return typeof o.reason === "string" && typeof o.hint === "string";
 }
 
+// The model is asked for pure JSON, but without a hard structured-output
+// constraint it occasionally wraps the object in a markdown ```json fence or
+// adds a sentence of prose before/after it. Rather than reject those outright
+// (which strands the player on "der Spielleiter hat sich verhaspelt"), extract
+// the first {...} object from the text and parse that. Genuinely unparseable
+// output still throws, preserving the retry-once contract.
+function extractJsonObject(raw: string): unknown {
+  const trimmed = raw.trim();
+  // Fast path: already clean JSON.
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    // fall through to extraction
+  }
+  // Slow path: grab the substring from the first "{" to the last "}".
+  const start = trimmed.indexOf("{");
+  const end = trimmed.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) {
+    throw new Error("GM reply contained no JSON object");
+  }
+  return JSON.parse(trimmed.slice(start, end + 1));
+}
+
 export function parseGmReply(raw: string): GmReply {
   let data: unknown;
   try {
-    data = JSON.parse(raw);
+    data = extractJsonObject(raw);
   } catch {
     throw new Error("GM reply was not valid JSON");
   }
