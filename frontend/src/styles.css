@@ -1,0 +1,15 @@
+body { margin: 0; font-family: Georgia, serif; background: #1a1712; color: #e8e0d0; }
+.app { max-width: 760px; margin: 0 auto; padding: 1.5rem; }
+header { display: flex; justify-content: space-between; align-items: center; }
+h1 { font-size: 1.4rem; }
+.transcript { margin: 1rem 0; line-height: 1.6; }
+.transcript p { margin: 0.6rem 0; }
+.transcript .gm { color: #e8e0d0; }
+.transcript .player { color: #9db4c0; font-style: italic; }
+.dice, .action { display: flex; gap: 0.5rem; margin-top: 1rem; }
+.dice { background: #2a2118; padding: 0.75rem; border-radius: 6px; flex-wrap: wrap; }
+input { flex: 1; padding: 0.5rem; font-size: 1rem; background: #12100c; color: #e8e0d0; border: 1px solid #4a3f30; border-radius: 4px; }
+button { padding: 0.5rem 1rem; background: #b5642f; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+button:disabled { opacity: 0.5; cursor: default; }
+.error { color: #e08b7b; }
+.busy { color: #9db4c0; font-style: italic; }
