@@ -7,7 +7,7 @@ import type { DiceRequest } from "./types.js";
 
 export function buildServer(call: ClaudeCaller): FastifyInstance {
   const app = Fastify();
-  app.register(cors, { origin: true });
+  app.register(cors, { origin: ["http://localhost:5173", "http://127.0.0.1:5173"] });
 
   const session = new Session();
   let pendingDice: DiceRequest | null = null;
