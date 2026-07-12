@@ -81,6 +81,7 @@ describe("generateStory", () => {
     expect(arg.messages).toEqual([
       { role: "user", content: "SPIELLEITER: Ihr steht am Eingang.\n\nSPIELER: Ich gehe hinein." },
     ]);
+    expect(arg.schema).toBeUndefined();
   });
 
   it("throws on an empty or whitespace-only response", async () => {

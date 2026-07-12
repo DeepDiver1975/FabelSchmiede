@@ -151,6 +151,30 @@ describe("server", () => {
     await app.close();
   });
 
+  it("rejects an empty action with 400", async () => {
+    const { app } = setup();
+    const { campaign } = await createCampaign(app);
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/campaigns/${campaign.id}/action`,
+      payload: { text: "   " },
+    });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it("rejects an empty roll with 400", async () => {
+    const { app } = setup();
+    const { campaign } = await createCampaign(app);
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/campaigns/${campaign.id}/roll`,
+      payload: { result: "" },
+    });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
   it("never fabricates a turn: a failing caller returns 500 and persists nothing", async () => {
     const store = new CampaignStore(openDb(":memory:"));
     const good = buildServer(fakeCall, store);

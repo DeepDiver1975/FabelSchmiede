@@ -69,6 +69,20 @@ describe("CampaignStore", () => {
     expect(after.finished_at).not.toBeNull();
   });
 
+  it("appendTurns writes multiple turns atomically in one transaction", () => {
+    const store = freshStore();
+    const c = store.createCampaign("C", "p");
+    store.appendTurns(c.id, [
+      { role: "player", text: "Ich greife an.", diceRequest: null },
+      { role: "gm", text: "Der Goblin weicht aus.", diceRequest: { reason: "Angriff", hint: "W20" } },
+    ]);
+    const turns = store.getTurns(c.id);
+    expect(turns).toEqual([
+      { role: "player", text: "Ich greife an.", diceRequest: null },
+      { role: "gm", text: "Der Goblin weicht aus.", diceRequest: { reason: "Angriff", hint: "W20" } },
+    ]);
+  });
+
   it("saveStory upserts — regenerating overwrites the row", () => {
     const store = freshStore();
     const c = store.createCampaign("C", "p");

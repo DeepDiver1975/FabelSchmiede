@@ -13,7 +13,10 @@ export function PickerView({
   const [error, setError] = useState<string | null>(null);
 
   function refresh() {
-    api.listCampaigns().then(setCampaigns).catch((e) => setError(String(e)));
+    api
+      .listCampaigns()
+      .then(setCampaigns)
+      .catch((e) => setError(e instanceof Error ? e.message : String(e)));
   }
 
   useEffect(refresh, []);

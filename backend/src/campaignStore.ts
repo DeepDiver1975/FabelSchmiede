@@ -59,6 +59,13 @@ export class CampaignStore {
       );
   }
 
+  appendTurns(campaignId: string, turns: TurnInput[]): void {
+    const tx = this.db.transaction((items: TurnInput[]) => {
+      for (const t of items) this.appendTurn(campaignId, t);
+    });
+    tx(turns);
+  }
+
   getTurns(campaignId: string): StoredTurn[] {
     const rows = this.db
       .prepare(

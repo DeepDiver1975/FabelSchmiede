@@ -44,8 +44,10 @@ export function buildServer(call: ClaudeCaller, store: CampaignStore): FastifyIn
     } catch {
       return reply.code(500).send({ error: VERHASPELT });
     }
-    store.appendTurn(id, { role: "player", text: playerText, diceRequest: null });
-    store.appendTurn(id, { role: "gm", text: gm.narration, diceRequest: gm.diceRequest });
+    store.appendTurns(id, [
+      { role: "player", text: playerText, diceRequest: null },
+      { role: "gm", text: gm.narration, diceRequest: gm.diceRequest },
+    ]);
     return stateOf(id);
   }
 
@@ -83,12 +85,20 @@ export function buildServer(call: ClaudeCaller, store: CampaignStore): FastifyIn
 
   app.post<{ Params: { id: string }; Body: { text: string } }>(
     "/api/campaigns/:id/action",
-    async (req, reply) => play(req.params.id, req.body.text, reply),
+    async (req, reply) => {
+      const text = req.body?.text?.trim();
+      if (!text) return reply.code(400).send({ error: "Es fehlt eine Handlung." });
+      return play(req.params.id, text, reply);
+    },
   );
 
   app.post<{ Params: { id: string }; Body: { result: string } }>(
     "/api/campaigns/:id/roll",
-    async (req, reply) => play(req.params.id, `[Würfelergebnis: ${req.body.result}]`, reply),
+    async (req, reply) => {
+      const result = req.body?.result?.trim();
+      if (!result) return reply.code(400).send({ error: "Es fehlt ein Würfelergebnis." });
+      return play(req.params.id, `[Würfelergebnis: ${result}]`, reply);
+    },
   );
 
   app.post<{ Params: { id: string } }>("/api/campaigns/:id/finish", async (req, reply) => {

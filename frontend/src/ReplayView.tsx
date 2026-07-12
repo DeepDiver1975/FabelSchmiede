@@ -19,8 +19,10 @@ export function ReplayView({
     api
       .getStory(campaignId)
       .then(setStory)
-      .catch(() => {
-        /* 404 = no story yet; leave null */
+      .catch((e) => {
+        const msg = e instanceof Error ? e.message : String(e);
+        // "Noch keine Geschichte erzählt." is the backend's 404 for no story yet — leave empty.
+        if (!msg.includes("Noch keine Geschichte")) setError(msg);
       });
   }, [campaignId]);
 
