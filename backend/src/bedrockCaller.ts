@@ -19,7 +19,7 @@ export function createBedrockCaller(region: string): ClaudeCaller {
       max_tokens: 2000,
       system,
       messages,
-      output_config: { format: { type: "json_schema", schema } },
+      output_config: { format: { type: "json_schema", schema: schema as Record<string, unknown> } },
     });
     return extractText(response as { content: TextBlock[] });
   };
