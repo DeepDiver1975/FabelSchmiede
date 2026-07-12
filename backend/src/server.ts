@@ -1,53 +1,125 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
 import { Session } from "./session.js";
-import { generateGmReply, type ClaudeCaller } from "./gmEngine.js";
+import {
+  generateGmReply,
+  generateOpening,
+  generateStory,
+  type ClaudeCaller,
+} from "./gmEngine.js";
 import { createBedrockCaller } from "./bedrockCaller.js";
-import type { DiceRequest } from "./types.js";
+import { CampaignStore } from "./campaignStore.js";
+import type { DiceRequest, StoredTurn } from "./types.js";
 
-export function buildServer(call: ClaudeCaller): FastifyInstance {
+const VERHASPELT = "Der Spielleiter hat sich verhaspelt — bitte nochmal.";
+
+function pendingFrom(turns: StoredTurn[]): DiceRequest | null {
+  const last = turns[turns.length - 1];
+  return last && last.role === "gm" ? last.diceRequest : null;
+}
+
+export function buildServer(call: ClaudeCaller, store: CampaignStore): FastifyInstance {
   const app = Fastify();
   app.register(cors, { origin: ["http://localhost:5173", "http://127.0.0.1:5173"] });
 
-  const session = new Session();
-  let pendingDice: DiceRequest | null = null;
-
-  function state() {
-    return { history: session.getHistory(), pendingDice };
+  function stateOf(id: string) {
+    const campaign = store.getCampaign(id);
+    if (!campaign) return null;
+    const turns = store.getTurns(id);
+    return { campaign, turns, pendingDice: pendingFrom(turns) };
   }
 
-  async function advance(reply: Awaited<ReturnType<typeof generateGmReply>>) {
-    session.addGmTurn(reply.narration);
-    pendingDice = reply.diceRequest;
+  // Shared handler for action + roll: never persist unless the GM reply parses.
+  async function play(id: string, playerText: string, reply: import("fastify").FastifyReply) {
+    const campaign = store.getCampaign(id);
+    if (!campaign) return reply.code(404).send({ error: "Kampagne nicht gefunden." });
+    if (campaign.status === "finished")
+      return reply.code(409).send({ error: "Diese Kampagne ist abgeschlossen." });
+
+    const session = new Session(store.getTurns(id));
+    session.addPlayerTurn(playerText);
+    let gm;
+    try {
+      gm = await generateGmReply(session.getHistory(), campaign.premise, call);
+    } catch {
+      return reply.code(500).send({ error: VERHASPELT });
+    }
+    store.appendTurn(id, { role: "player", text: playerText, diceRequest: null });
+    store.appendTurn(id, { role: "gm", text: gm.narration, diceRequest: gm.diceRequest });
+    return stateOf(id);
   }
 
-  app.get("/api/state", async () => state());
+  app.get("/api/campaigns", async () => store.listCampaigns());
 
-  app.post<{ Body: { text: string } }>("/api/action", async (req, reply) => {
-    session.addPlayerTurn(req.body.text);
-    try {
-      await advance(await generateGmReply(session.getHistory(), call));
-    } catch {
-      return reply.code(500).send({ error: "Der Spielleiter hat sich verhaspelt — bitte nochmal." });
-    }
-    return state();
+  app.post<{ Body: { name: string; premise: string } }>(
+    "/api/campaigns",
+    async (req, reply) => {
+      const name = req.body?.name?.trim();
+      const premise = req.body?.premise?.trim();
+      if (!name || !premise) {
+        return reply.code(400).send({ error: "Name und Prämisse sind erforderlich." });
+      }
+      let opening;
+      try {
+        opening = await generateOpening(premise, call);
+      } catch {
+        return reply.code(500).send({ error: VERHASPELT });
+      }
+      const campaign = store.createCampaign(name, premise);
+      store.appendTurn(campaign.id, {
+        role: "gm",
+        text: opening.narration,
+        diceRequest: opening.diceRequest,
+      });
+      return stateOf(campaign.id);
+    },
+  );
+
+  app.get<{ Params: { id: string } }>("/api/campaigns/:id/state", async (req, reply) => {
+    const state = stateOf(req.params.id);
+    if (!state) return reply.code(404).send({ error: "Kampagne nicht gefunden." });
+    return state;
   });
 
-  app.post<{ Body: { result: string } }>("/api/roll", async (req, reply) => {
-    session.addPlayerTurn(`[Würfelergebnis: ${req.body.result}]`);
-    pendingDice = null;
-    try {
-      await advance(await generateGmReply(session.getHistory(), call));
-    } catch {
-      return reply.code(500).send({ error: "Der Spielleiter hat sich verhaspelt — bitte nochmal." });
-    }
-    return state();
+  app.post<{ Params: { id: string }; Body: { text: string } }>(
+    "/api/campaigns/:id/action",
+    async (req, reply) => play(req.params.id, req.body.text, reply),
+  );
+
+  app.post<{ Params: { id: string }; Body: { result: string } }>(
+    "/api/campaigns/:id/roll",
+    async (req, reply) => play(req.params.id, `[Würfelergebnis: ${req.body.result}]`, reply),
+  );
+
+  app.post<{ Params: { id: string } }>("/api/campaigns/:id/finish", async (req, reply) => {
+    const campaign = store.getCampaign(req.params.id);
+    if (!campaign) return reply.code(404).send({ error: "Kampagne nicht gefunden." });
+    store.finishCampaign(campaign.id);
+    return store.getCampaign(campaign.id);
   });
 
-  app.post("/api/reset", async () => {
-    session.reset();
-    pendingDice = null;
-    return state();
+  app.post<{ Params: { id: string } }>("/api/campaigns/:id/story", async (req, reply) => {
+    const campaign = store.getCampaign(req.params.id);
+    if (!campaign) return reply.code(404).send({ error: "Kampagne nicht gefunden." });
+    if (campaign.status !== "finished")
+      return reply
+        .code(409)
+        .send({ error: "Nur abgeschlossene Kampagnen können nacherzählt werden." });
+    let markdown;
+    try {
+      markdown = await generateStory(store.getTurns(campaign.id), campaign, call);
+    } catch {
+      return reply.code(500).send({ error: VERHASPELT });
+    }
+    return store.saveStory(campaign.id, markdown);
+  });
+
+  app.get<{ Params: { id: string } }>("/api/campaigns/:id/story", async (req, reply) => {
+    const campaign = store.getCampaign(req.params.id);
+    if (!campaign) return reply.code(404).send({ error: "Kampagne nicht gefunden." });
+    const story = store.getStory(campaign.id);
+    if (!story) return reply.code(404).send({ error: "Noch keine Geschichte erzählt." });
+    return story;
   });
 
   return app;
@@ -57,14 +129,19 @@ async function main() {
   const { config } = await import("dotenv");
   const { fileURLToPath } = await import("node:url");
   const { dirname, resolve } = await import("node:path");
-  // The .env lives at the repo root; resolve it relative to this file
-  // (backend/src/) so it loads regardless of the process working directory.
+  const { mkdirSync } = await import("node:fs");
+  const { openDb } = await import("./db.js");
+  // The .env and data/ live at the repo root; resolve relative to this file
+  // (backend/src/) so they work regardless of the process working directory.
   const here = dirname(fileURLToPath(import.meta.url));
   config({ path: resolve(here, "../../.env") });
   const region = process.env.AWS_REGION;
   if (!region) throw new Error("AWS_REGION is not set — copy .env.example to .env");
+  const dataDir = resolve(here, "../../data");
+  mkdirSync(dataDir, { recursive: true });
+  const store = new CampaignStore(openDb(resolve(dataDir, "campaigns.db")));
   const port = Number(process.env.BACKEND_PORT ?? 8787);
-  const app = buildServer(createBedrockCaller(region));
+  const app = buildServer(createBedrockCaller(region), store);
   await app.listen({ port, host: "127.0.0.1" });
   console.log(`GM backend listening on http://127.0.0.1:${port}`);
 }

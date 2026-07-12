@@ -1,4 +1,4 @@
-import { buildSystemPrompt, historyToMessages } from "./prompt.js";
+import { buildSystemPrompt, buildOpeningSystemPrompt, historyToMessages } from "./prompt.js";
 import { buildStorySystemPrompt, renderTranscript } from "./storyPrompt.js";
 import { parseGmReply } from "./parseReply.js";
 import { GM_REPLY_SCHEMA } from "./types.js";
@@ -10,21 +10,34 @@ export type ClaudeCaller = (args: {
   schema?: object;
 }) => Promise<string>;
 
-export async function generateGmReply(
-  history: Turn[],
+async function callWithRetry(
+  system: string,
+  messages: { role: "user" | "assistant"; content: string }[],
   call: ClaudeCaller,
 ): Promise<GmReply> {
-  const args = {
-    system: buildSystemPrompt(),
-    messages: historyToMessages(history),
-    schema: GM_REPLY_SCHEMA,
-  };
+  const args = { system, messages, schema: GM_REPLY_SCHEMA };
   try {
     return parseGmReply(await call(args));
   } catch {
-    // Retry exactly once — structured output can occasionally slip.
+    // Retry exactly once — JSON steering can occasionally slip.
     return parseGmReply(await call(args));
   }
+}
+
+export async function generateGmReply(
+  history: Turn[],
+  premise: string,
+  call: ClaudeCaller,
+): Promise<GmReply> {
+  return callWithRetry(buildSystemPrompt(premise), historyToMessages(history), call);
+}
+
+export async function generateOpening(premise: string, call: ClaudeCaller): Promise<GmReply> {
+  return callWithRetry(
+    buildOpeningSystemPrompt(premise),
+    [{ role: "user", content: "Beginne das Abenteuer." }],
+    call,
+  );
 }
 
 export async function generateStory(

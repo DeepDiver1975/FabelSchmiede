@@ -1,11 +1,12 @@
-import type { Turn } from "./types.js";
-import { OPENING_NARRATION } from "./scene.js";
+import type { StoredTurn, Turn } from "./types.js";
 
+// A per-campaign in-memory read model, hydrated from stored turns. Used to build
+// the history handed to the GM engine; the store remains the source of truth.
 export class Session {
   private history: Turn[];
 
-  constructor() {
-    this.history = [{ role: "gm", text: OPENING_NARRATION }];
+  constructor(turns: StoredTurn[]) {
+    this.history = turns.map((t) => ({ role: t.role, text: t.text }));
   }
 
   getHistory(): Turn[] {
@@ -18,9 +19,5 @@ export class Session {
 
   addGmTurn(text: string): void {
     this.history.push({ role: "gm", text });
-  }
-
-  reset(): void {
-    this.history = [{ role: "gm", text: OPENING_NARRATION }];
   }
 }

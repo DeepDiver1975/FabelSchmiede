@@ -1,15 +1,22 @@
 import { describe, it, expect } from "vitest";
 import { Session } from "./session.js";
-import { OPENING_NARRATION } from "./scene.js";
+import type { StoredTurn } from "./types.js";
 
 describe("Session", () => {
-  it("starts with the opening narration as a gm turn", () => {
-    const s = new Session();
-    expect(s.getHistory()).toEqual([{ role: "gm", text: OPENING_NARRATION }]);
+  it("hydrates history from stored turns, keeping role and text", () => {
+    const turns: StoredTurn[] = [
+      { role: "gm", text: "Ihr steht am Eingang.", diceRequest: null },
+      { role: "player", text: "Ich gehe hinein.", diceRequest: null },
+    ];
+    const s = new Session(turns);
+    expect(s.getHistory()).toEqual([
+      { role: "gm", text: "Ihr steht am Eingang." },
+      { role: "player", text: "Ich gehe hinein." },
+    ]);
   });
 
   it("appends player and gm turns in order", () => {
-    const s = new Session();
+    const s = new Session([{ role: "gm", text: "Start", diceRequest: null }]);
     s.addPlayerTurn("Ich schaue mich um.");
     s.addGmTurn("Du siehst Fackeln.");
     const h = s.getHistory();
@@ -17,10 +24,7 @@ describe("Session", () => {
     expect(h[2]).toEqual({ role: "gm", text: "Du siehst Fackeln." });
   });
 
-  it("reset returns to just the opening", () => {
-    const s = new Session();
-    s.addPlayerTurn("x");
-    s.reset();
-    expect(s.getHistory()).toHaveLength(1);
+  it("starts empty when hydrated from no turns", () => {
+    expect(new Session([]).getHistory()).toEqual([]);
   });
 });
