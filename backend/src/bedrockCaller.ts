@@ -13,13 +13,19 @@ export function extractText(msg: { content: TextBlock[] }): string {
 
 export function createBedrockCaller(region: string): ClaudeCaller {
   const client = new AnthropicBedrock({ awsRegion: region });
-  return async ({ system, messages, schema }) => {
+  return async ({ system, messages }) => {
     const response = await client.messages.create({
-      model: "anthropic.claude-opus-4-8",
-      max_tokens: 2000,
+      // Bedrock requires a cross-region inference-profile ID (the `us.` prefix),
+      // not the bare model ID — on-demand throughput is not offered on the bare ID.
+      model: "us.anthropic.claude-opus-4-8",
+      // Headroom for a florid German narration plus a diceRequest — at 2000 a
+      // long turn could truncate mid-JSON and fail to parse.
+      max_tokens: 4000,
+      // This Bedrock endpoint rejects `output_config` ("Extra inputs are not
+      // permitted"), so we steer JSON via the system prompt instead and rely on
+      // parseGmReply's retry-once contract to catch the rare non-JSON reply.
       system,
       messages,
-      output_config: { format: { type: "json_schema", schema: schema as Record<string, unknown> } },
     });
     return extractText(response as { content: TextBlock[] });
   };

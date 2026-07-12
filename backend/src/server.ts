@@ -55,7 +55,12 @@ export function buildServer(call: ClaudeCaller): FastifyInstance {
 
 async function main() {
   const { config } = await import("dotenv");
-  config();
+  const { fileURLToPath } = await import("node:url");
+  const { dirname, resolve } = await import("node:path");
+  // The .env lives at the repo root; resolve it relative to this file
+  // (backend/src/) so it loads regardless of the process working directory.
+  const here = dirname(fileURLToPath(import.meta.url));
+  config({ path: resolve(here, "../../.env") });
   const region = process.env.AWS_REGION;
   if (!region) throw new Error("AWS_REGION is not set — copy .env.example to .env");
   const port = Number(process.env.BACKEND_PORT ?? 8787);
