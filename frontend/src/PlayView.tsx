@@ -19,8 +19,8 @@ function PartyPanel({
 }: {
   characters: Character[];
   readOnly: boolean;
-  onCreate: (input: CharacterInput) => Promise<void>;
-  onUpdate: (cid: string, patch: CharacterInput) => Promise<void>;
+  onCreate: (input: CharacterInput) => Promise<boolean>;
+  onUpdate: (cid: string, patch: CharacterInput) => Promise<boolean>;
   onDelete: (cid: string) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
@@ -44,16 +44,17 @@ function PartyPanel({
     const concept = form.concept.trim();
     if (!name || !concept) return;
     const cleaned = cleanNarrative(form.narrative);
+    let ok: boolean;
     if (form.id) {
       // Edit always submits the complete current narrative (even {}), so a
       // cleared field actually clears on the server (PATCH replaces wholesale).
-      await onUpdate(form.id, { name, concept, narrative: cleaned });
+      ok = await onUpdate(form.id, { name, concept, narrative: cleaned });
     } else {
       const input: CharacterInput = { name, concept };
       if (Object.keys(cleaned).length > 0) input.narrative = cleaned;
-      await onCreate(input);
+      ok = await onCreate(input);
     }
-    setForm(null);
+    if (ok) setForm(null);
   }
 
   function setNarrativeField(key: keyof CharacterNarrative, value: string) {
@@ -241,21 +242,25 @@ export function PlayView({
     }
   }
 
-  async function createCharacter(inputData: CharacterInput) {
+  async function createCharacter(inputData: CharacterInput): Promise<boolean> {
     try {
       await api.createCharacter(id, inputData);
       await refetchState();
+      return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      return false;
     }
   }
 
-  async function updateCharacter(cid: string, patch: CharacterInput) {
+  async function updateCharacter(cid: string, patch: CharacterInput): Promise<boolean> {
     try {
       await api.updateCharacter(id, cid, patch);
       await refetchState();
+      return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      return false;
     }
   }
 
