@@ -19,7 +19,10 @@ function pendingFrom(turns: StoredTurn[]): DiceRequest | null {
 }
 
 export function buildServer(call: ClaudeCaller, store: CampaignStore): FastifyInstance {
-  const app = Fastify();
+  // Enable Pino request logging outside tests; under vitest (NODE_ENV=test) the
+  // request logs are just noise. Even when the logger is off, Fastify supplies a
+  // no-op `app.log`, so the explicit error logging below still works.
+  const app = Fastify({ logger: process.env.NODE_ENV !== "test" });
   app.register(cors, { origin: ["http://localhost:5173", "http://127.0.0.1:5173"] });
 
   function stateOf(id: string) {
@@ -41,7 +44,8 @@ export function buildServer(call: ClaudeCaller, store: CampaignStore): FastifyIn
     let gm;
     try {
       gm = await generateGmReply(session.getHistory(), campaign.premise, call);
-    } catch {
+    } catch (err) {
+      reply.log.error({ err, campaignId: id, playerText }, "GM reply failed (verhaspelt)");
       return reply.code(500).send({ error: VERHASPELT });
     }
     store.appendTurns(id, [
@@ -64,7 +68,8 @@ export function buildServer(call: ClaudeCaller, store: CampaignStore): FastifyIn
       let opening;
       try {
         opening = await generateOpening(premise, call);
-      } catch {
+      } catch (err) {
+        reply.log.error({ err, premise }, "opening generation failed (verhaspelt)");
         return reply.code(500).send({ error: VERHASPELT });
       }
       const campaign = store.createCampaign(name, premise);
@@ -118,7 +123,8 @@ export function buildServer(call: ClaudeCaller, store: CampaignStore): FastifyIn
     let markdown;
     try {
       markdown = await generateStory(store.getTurns(campaign.id), campaign, call);
-    } catch {
+    } catch (err) {
+      reply.log.error({ err, campaignId: campaign.id }, "story generation failed (verhaspelt)");
       return reply.code(500).send({ error: VERHASPELT });
     }
     return store.saveStory(campaign.id, markdown);

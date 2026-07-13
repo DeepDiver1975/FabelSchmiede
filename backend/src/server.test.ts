@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { buildServer } from "./server.js";
 import { CampaignStore } from "./campaignStore.js";
 import { openDb } from "./db.js";
@@ -196,5 +196,25 @@ describe("server", () => {
     const state = await check.inject({ method: "GET", url: `/api/campaigns/${campaign.id}/state` });
     expect(state.json().turns).toHaveLength(1);
     await check.close();
+  });
+
+  it("logs the underlying error when the GM reply fails", async () => {
+    const store = new CampaignStore(openDb(":memory:"));
+    const good = buildServer(fakeCall, store);
+    const { campaign } = await createCampaign(good);
+    await good.close();
+
+    const bad = buildServer(async () => "garbage", store);
+    const spy = vi.spyOn(bad.log, "error");
+    const res = await bad.inject({
+      method: "POST",
+      url: `/api/campaigns/${campaign.id}/action`,
+      payload: { text: "x" },
+    });
+    expect(res.statusCode).toBe(500);
+    expect(spy).toHaveBeenCalled();
+    const [firstArg] = spy.mock.calls[0];
+    expect(firstArg).toHaveProperty("err");
+    await bad.close();
   });
 });
