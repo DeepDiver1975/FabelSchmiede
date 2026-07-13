@@ -19,7 +19,37 @@ export type CampaignSummary = {
   finished_at: string | null;
 };
 
-export type State = { campaign: Campaign; turns: Turn[]; pendingDice: DiceRequest | null };
+export type CharacterNarrative = {
+  backstory?: string;
+  personality?: string;
+  ideal?: string;
+  bond?: string;
+  flaw?: string;
+  appearance?: string;
+};
+
+export type Character = {
+  id: string;
+  campaign_id: string;
+  name: string;
+  concept: string;
+  narrative?: CharacterNarrative;
+  created_at: string;
+};
+
+// Stage 1 only manages narrative fields; level/abilities/resources are later stages.
+export type CharacterInput = {
+  name: string;
+  concept: string;
+  narrative?: CharacterNarrative;
+};
+
+export type State = {
+  campaign: Campaign;
+  turns: Turn[];
+  pendingDice: DiceRequest | null;
+  characters: Character[];
+};
 export type Story = { markdown: string; generated_at: string };
 
 async function req<T>(url: string, method: string, body?: unknown): Promise<T> {
@@ -32,6 +62,7 @@ async function req<T>(url: string, method: string, body?: unknown): Promise<T> {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(data.error ?? "Unbekannter Fehler");
   }
+  if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
 
@@ -45,4 +76,11 @@ export const api = {
   finish: (id: string) => req<Campaign>(`/api/campaigns/${id}/finish`, "POST"),
   generateStory: (id: string) => req<Story>(`/api/campaigns/${id}/story`, "POST"),
   getStory: (id: string) => req<Story>(`/api/campaigns/${id}/story`, "GET"),
+  listCharacters: (id: string) => req<Character[]>(`/api/campaigns/${id}/characters`, "GET"),
+  createCharacter: (id: string, input: CharacterInput) =>
+    req<Character>(`/api/campaigns/${id}/characters`, "POST", input),
+  updateCharacter: (id: string, cid: string, patch: CharacterInput) =>
+    req<Character>(`/api/campaigns/${id}/characters/${cid}`, "PATCH", patch),
+  deleteCharacter: (id: string, cid: string) =>
+    req<void>(`/api/campaigns/${id}/characters/${cid}`, "DELETE"),
 };
