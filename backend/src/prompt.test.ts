@@ -10,6 +10,26 @@ describe("buildSystemPrompt", () => {
   it("embeds the campaign premise", () => {
     expect(buildSystemPrompt("Goblins im Nebelwald")).toContain("Goblins im Nebelwald");
   });
+
+  it("instructs the GM to keep established names, places, and counts consistent", () => {
+    const p = buildSystemPrompt("Goblins im Nebelwald").toLowerCase();
+    expect(p).toContain("konsistent");
+    // must warn against confusing a person's name with a place
+    expect(p).toContain("person");
+    expect(p).toContain("ort");
+  });
+
+  it("folds the opening narration into the prompt so its facts survive later turns", () => {
+    const opening = "Ihr betretet das Dorf Einwindtal. Am Waldrand lauern vier Goblins.";
+    const p = buildSystemPrompt("Goblins im Nebelwald", opening);
+    expect(p).toContain("Einwindtal");
+    expect(p).toContain("vier Goblins");
+  });
+
+  it("omits the opening section when no opening is given", () => {
+    // A fresh campaign with no prior opening must not leave a dangling heading.
+    expect(buildSystemPrompt("Goblins im Nebelwald")).not.toContain("BISHERIGER VERLAUF");
+  });
 });
 
 describe("buildOpeningSystemPrompt", () => {

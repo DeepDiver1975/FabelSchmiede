@@ -1,6 +1,17 @@
 import { SCENE_BRIEF } from "./scene.js";
 import type { Turn } from "./types.js";
 
+const CONTINUITY_RULES = `
+KONSISTENZ (SEHR WICHTIG):
+- Bleibe konsistent mit allem, was bereits etabliert wurde. Behalte einmal
+  eingeführte Namen von Orten, Personen und Gegenständen unverändert bei und
+  erfinde sie nicht neu — derselbe Ort behält denselben Namen.
+- Behalte einmal genannte Zahlen bei (z. B. die Anzahl der Gegner). Ändere sie
+  nur, wenn es eine erzählerische Ursache gibt (z. B. ein Gegner wurde besiegt).
+- Verwechsle niemals den Namen einer Person mit dem eines Ortes oder umgekehrt.
+  Wer als Person eingeführt wurde, bleibt eine Person; ein Ort bleibt ein Ort.
+`.trim();
+
 const DICE_AND_FORMAT_RULES = `
 REGELN FÜR DICH:
 - Würfle niemals selbst und erfinde niemals Würfelergebnisse.
@@ -17,14 +28,27 @@ Antworte ausschließlich als JSON-Objekt mit den Feldern "narration" (dein
 deutscher Erzähltext) und "diceRequest" (Objekt {reason, hint} oder null).
 `.trim();
 
-export function buildSystemPrompt(premise: string): string {
+// The opening narration is a gm turn and is dropped from the message list
+// (the Messages API requires a leading user message). But it is where the GM
+// first establishes canonical facts — place names, NPC names, enemy counts —
+// that are NOT in the premise. Fold it back into the system prompt so those
+// facts survive on every later turn; otherwise the model re-invents them and
+// the world drifts (renamed locations, 4 goblins → 3).
+function openingSection(opening: string | undefined): string {
+  const text = opening?.trim();
+  return text ? `\n\nBISHERIGER VERLAUF (so hat das Abenteuer begonnen — bleibe dazu konsistent):\n${text}` : "";
+}
+
+export function buildSystemPrompt(premise: string, opening?: string): string {
   return `
 Du bist der Spielleiter (Game Master).
 
 ${SCENE_BRIEF}
 
 SZENE DIESER KAMPAGNE:
-${premise}
+${premise}${openingSection(opening)}
+
+${CONTINUITY_RULES}
 
 ${DICE_AND_FORMAT_RULES}
 `.trim();

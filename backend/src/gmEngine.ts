@@ -29,7 +29,10 @@ export async function generateGmReply(
   premise: string,
   call: ClaudeCaller,
 ): Promise<GmReply> {
-  return callWithRetry(buildSystemPrompt(premise), historyToMessages(history), call);
+  // The opening narration (first gm turn) is dropped from the message list by
+  // historyToMessages, so fold its canonical facts into the system prompt.
+  const opening = history[0]?.role === "gm" ? history[0].text : undefined;
+  return callWithRetry(buildSystemPrompt(premise, opening), historyToMessages(history), call);
 }
 
 export async function generateOpening(premise: string, call: ClaudeCaller): Promise<GmReply> {
