@@ -181,6 +181,10 @@ export class CampaignStore {
         character.id,
       );
   }
+
+  deleteCharacter(id: string): void {
+    this.db.prepare("DELETE FROM characters WHERE id = ?").run(id);
+  }
 }
 
 type CharacterRow = {

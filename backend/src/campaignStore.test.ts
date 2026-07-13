@@ -152,4 +152,15 @@ describe("CampaignStore", () => {
     });
     expect(store.getCharacter(created.id)!.resources![0].used).toBe(1);
   });
+
+  it("deleteCharacter removes only the target and is campaign-scoped", () => {
+    const store = freshStore();
+    const c = store.createCampaign("C", "p");
+    const a = store.createCharacter(c.id, { name: "Erste", concept: "Kriegerin" });
+    const b = store.createCharacter(c.id, { name: "Zweite", concept: "Schurke" });
+    store.deleteCharacter(a.id);
+    expect(store.getCharacter(a.id)).toBeNull();
+    expect(store.getCharacter(b.id)).not.toBeNull();
+    expect(store.listCharacters(c.id).map((ch) => ch.name)).toEqual(["Zweite"]);
+  });
 });
