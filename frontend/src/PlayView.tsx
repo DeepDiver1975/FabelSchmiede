@@ -203,6 +203,12 @@ function PartyPanel({
   );
 }
 
+type PendingTurn = { kind: "action" | "roll"; text: string; failed: boolean };
+
+function pendingTurnText(t: PendingTurn): string {
+  return t.kind === "roll" ? `[Würfelergebnis: ${t.text}]` : t.text;
+}
+
 export function PlayView({
   initial,
   onBack,
@@ -217,21 +223,35 @@ export function PlayView({
   const [roll, setRoll] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingTurn, setPendingTurn] = useState<PendingTurn | null>(null);
 
   const id = state.campaign.id;
   const pending = state.pendingDice;
   const finished = state.campaign.status === "finished";
 
-  async function run(fn: () => Promise<State>) {
+  // Shown in the transcript immediately (optimistic) and kept around on failure
+  // so "Erneut senden" can resubmit the exact same text without retyping. The
+  // backend never persists on a malformed GM reply, so this is the only record
+  // of the attempt until it succeeds.
+  async function submitPlay(kind: "action" | "roll", text: string) {
+    setPendingTurn({ kind, text, failed: false });
     setBusy(true);
     setError(null);
     try {
-      setState(await fn());
+      const next = kind === "action" ? await api.action(id, text) : await api.roll(id, text);
+      setState(next);
+      setPendingTurn(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      setPendingTurn({ kind, text, failed: true });
     } finally {
       setBusy(false);
     }
+  }
+
+  function resend() {
+    if (!pendingTurn) return;
+    submitPlay(pendingTurn.kind, pendingTurn.text);
   }
 
   async function refetchState() {
@@ -277,14 +297,14 @@ export function PlayView({
     if (!input.trim()) return;
     const text = input;
     setInput("");
-    await run(() => api.action(id, text));
+    await submitPlay("action", text);
   }
 
   async function submitRoll() {
     if (!roll.trim()) return;
     const r = roll;
     setRoll("");
-    await run(() => api.roll(id, r));
+    await submitPlay("roll", r);
   }
 
   async function finish() {
@@ -324,9 +344,19 @@ export function PlayView({
             <strong>{t.role === "gm" ? "SL" : "Ihr"}:</strong> {t.text}
           </p>
         ))}
+        {pendingTurn && (
+          <p className={`player pending${pendingTurn.failed ? " failed" : ""}`}>
+            <strong>Ihr:</strong> {pendingTurnText(pendingTurn)}
+          </p>
+        )}
       </section>
 
       {error && <p className="error">{error}</p>}
+      {pendingTurn?.failed && (
+        <button className="resend" onClick={resend} disabled={busy}>
+          Erneut senden
+        </button>
+      )}
       {busy && <p className="busy">Der Spielleiter überlegt…</p>}
 
       {pending ? (
