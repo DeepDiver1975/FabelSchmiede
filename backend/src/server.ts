@@ -8,6 +8,7 @@ import {
   type ClaudeCaller,
 } from "./gmEngine.js";
 import { createBedrockCaller } from "./bedrockCaller.js";
+import { createAnthropicCaller } from "./anthropicCaller.js";
 import { CampaignStore } from "./campaignStore.js";
 import type { Character, CharacterInput, DiceRequest, StoredTurn } from "./types.js";
 
@@ -220,13 +221,21 @@ async function main() {
   // (backend/src/) so they work regardless of the process working directory.
   const here = dirname(fileURLToPath(import.meta.url));
   config({ path: resolve(here, "../../.env") });
+  const apiKey = process.env.ANTHROPIC_API_KEY;
   const region = process.env.AWS_REGION;
-  if (!region) throw new Error("AWS_REGION is not set — copy .env.example to .env");
+  if (!apiKey && !region) {
+    throw new Error(
+      "Neither ANTHROPIC_API_KEY nor AWS_REGION is set — copy .env.example to .env",
+    );
+  }
+  // ANTHROPIC_API_KEY takes precedence; Bedrock is the fallback for
+  // AWS-credential-only setups.
+  const call = apiKey ? createAnthropicCaller(apiKey) : createBedrockCaller(region!);
   const dataDir = resolve(here, "../../data");
   mkdirSync(dataDir, { recursive: true });
   const store = new CampaignStore(openDb(resolve(dataDir, "campaigns.db")));
   const port = Number(process.env.BACKEND_PORT ?? 8787);
-  const app = buildServer(createBedrockCaller(region), store);
+  const app = buildServer(call, store);
   await app.listen({ port, host: "127.0.0.1" });
   console.log(`GM backend listening on http://127.0.0.1:${port}`);
 }
