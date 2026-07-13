@@ -1,9 +1,14 @@
 import type Database from "better-sqlite3";
 import { randomUUID } from "node:crypto";
 import type {
+  Ability,
   Campaign,
   CampaignSummary,
+  Character,
+  CharacterInput,
+  CharacterNarrative,
   DiceRequest,
+  ResourcePool,
   StoredTurn,
   Story,
 } from "./types.js";
@@ -110,4 +115,96 @@ export class CampaignStore {
       .get(campaignId);
     return (row as Story) ?? null;
   }
+
+  createCharacter(campaignId: string, input: CharacterInput): Character {
+    const id = randomUUID();
+    const created_at = new Date().toISOString();
+    this.db
+      .prepare(
+        `INSERT INTO characters
+           (id, campaign_id, name, concept, level, narrative, abilities, resources, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        id,
+        campaignId,
+        input.name,
+        input.concept,
+        input.level ?? null,
+        input.narrative ? JSON.stringify(input.narrative) : null,
+        input.abilities ? JSON.stringify(input.abilities) : null,
+        input.resources ? JSON.stringify(input.resources) : null,
+        created_at,
+      );
+    return {
+      id,
+      campaign_id: campaignId,
+      name: input.name,
+      concept: input.concept,
+      ...(input.level !== undefined ? { level: input.level } : {}),
+      ...(input.narrative ? { narrative: input.narrative } : {}),
+      ...(input.abilities ? { abilities: input.abilities } : {}),
+      ...(input.resources ? { resources: input.resources } : {}),
+      created_at,
+    };
+  }
+
+  getCharacter(id: string): Character | null {
+    const row = this.db.prepare("SELECT * FROM characters WHERE id = ?").get(id);
+    return row ? rowToCharacter(row as CharacterRow) : null;
+  }
+
+  listCharacters(campaignId: string): Character[] {
+    const rows = this.db
+      .prepare("SELECT * FROM characters WHERE campaign_id = ? ORDER BY created_at, rowid")
+      .all(campaignId) as CharacterRow[];
+    return rows.map(rowToCharacter);
+  }
+
+  // Persist mechanical mutations produced by the rule engine (e.g. a spent
+  // resource pool after a validated action). Only the JSON-backed columns and
+  // level are updatable; identity fields are fixed at creation.
+  updateCharacter(character: Character): void {
+    this.db
+      .prepare(
+        `UPDATE characters
+            SET name = ?, concept = ?, level = ?, narrative = ?, abilities = ?, resources = ?
+          WHERE id = ?`,
+      )
+      .run(
+        character.name,
+        character.concept,
+        character.level ?? null,
+        character.narrative ? JSON.stringify(character.narrative) : null,
+        character.abilities ? JSON.stringify(character.abilities) : null,
+        character.resources ? JSON.stringify(character.resources) : null,
+        character.id,
+      );
+  }
+}
+
+type CharacterRow = {
+  id: string;
+  campaign_id: string;
+  name: string;
+  concept: string;
+  level: number | null;
+  narrative: string | null;
+  abilities: string | null;
+  resources: string | null;
+  created_at: string;
+};
+
+function rowToCharacter(row: CharacterRow): Character {
+  return {
+    id: row.id,
+    campaign_id: row.campaign_id,
+    name: row.name,
+    concept: row.concept,
+    ...(row.level !== null ? { level: row.level } : {}),
+    ...(row.narrative ? { narrative: JSON.parse(row.narrative) as CharacterNarrative } : {}),
+    ...(row.abilities ? { abilities: JSON.parse(row.abilities) as Ability[] } : {}),
+    ...(row.resources ? { resources: JSON.parse(row.resources) as ResourcePool[] } : {}),
+    created_at: row.created_at,
+  };
 }

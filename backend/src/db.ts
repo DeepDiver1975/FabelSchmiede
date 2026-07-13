@@ -28,6 +28,23 @@ export function migrate(db: Database.Database): void {
       markdown TEXT NOT NULL,
       generated_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS characters (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id),
+      name TEXT NOT NULL,
+      concept TEXT NOT NULL,
+      level INTEGER,
+      -- Nested, variable-shape detail (narrative flavour, abilities, resource
+      -- pools) is stored as JSON: it is only ever read/written whole, so a
+      -- normalized schema would buy nothing here.
+      narrative TEXT,
+      abilities TEXT,
+      resources TEXT,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_characters_campaign ON characters(campaign_id);
   `);
 }
 
