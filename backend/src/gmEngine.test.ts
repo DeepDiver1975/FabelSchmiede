@@ -106,3 +106,25 @@ describe("generateStory", () => {
     await expect(generateStory(turns, campaign, vi.fn().mockResolvedValue("   "))).rejects.toThrow();
   });
 });
+
+describe("party roster threading", () => {
+  const character = { id: "1", campaign_id: "c", name: "Thorin", concept: "Krieger", created_at: "x" };
+
+  it("generateGmReply threads characters into the system prompt", async () => {
+    const call = vi.fn().mockResolvedValue('{"narration":"ok","diceRequest":null}');
+    await generateGmReply(history, premise, call, [character]);
+    expect(call.mock.calls[0][0].system).toContain("Thorin");
+  });
+
+  it("generateOpening threads characters into the system prompt", async () => {
+    const call = vi.fn().mockResolvedValue('{"narration":"ok","diceRequest":null}');
+    await generateOpening(premise, call, [character]);
+    expect(call.mock.calls[0][0].system).toContain("Thorin");
+  });
+
+  it("generateStory threads characters into the system prompt", async () => {
+    const call = vi.fn().mockResolvedValue("# x\n\ny");
+    await generateStory([], { name: "Die Höhle", premise }, call, [character]);
+    expect(call.mock.calls[0][0].system).toContain("Thorin");
+  });
+});
