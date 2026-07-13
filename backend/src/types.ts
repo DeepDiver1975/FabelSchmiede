@@ -5,7 +5,15 @@ export type GmReply = {
   diceRequest: DiceRequest | null;
 };
 
-export type Turn = { role: "gm" | "player"; text: string };
+// A turn in the conversation history. `diceRequest` is optional so callers may
+// omit it (e.g. player turns, or the opening gm turn which is dropped from the
+// message list); when a gm turn is replayed to the model it is folded back into
+// the JSON envelope so the conversation stays consistent with the system prompt.
+export type Turn = {
+  role: "gm" | "player";
+  text: string;
+  diceRequest?: DiceRequest | null;
+};
 
 export type CampaignStatus = "active" | "finished";
 

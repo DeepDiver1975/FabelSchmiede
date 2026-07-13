@@ -74,9 +74,17 @@ ${DICE_AND_FORMAT_RULES}
 export function historyToMessages(
   history: Turn[],
 ): { role: "user" | "assistant"; content: string }[] {
+  // gm turns are stored as bare narration, but the model is asked to reply as a
+  // JSON envelope. If we replay bare prose as the assistant's prior turns, the
+  // model imitates it and eventually drops the envelope itself — parseGmReply
+  // then fails ("GM reply was not valid JSON"). Reconstruct the envelope so the
+  // conversation stays consistent with the system prompt's format instruction.
   const messages = history.map((t) => ({
     role: (t.role === "gm" ? "assistant" : "user") as "user" | "assistant",
-    content: t.text,
+    content:
+      t.role === "gm"
+        ? JSON.stringify({ narration: t.text, diceRequest: t.diceRequest ?? null })
+        : t.text,
   }));
   // The Messages API requires the first message to have role "user". A campaign's
   // stored history begins with the opening narration (a gm turn → assistant), so

@@ -6,7 +6,13 @@ export class Session {
   private history: Turn[];
 
   constructor(turns: StoredTurn[]) {
-    this.history = turns.map((t) => ({ role: t.role, text: t.text }));
+    // Carry diceRequest through: historyToMessages folds it back into the JSON
+    // envelope when replaying gm turns to the model.
+    this.history = turns.map((t) => ({
+      role: t.role,
+      text: t.text,
+      diceRequest: t.diceRequest,
+    }));
   }
 
   getHistory(): Turn[] {

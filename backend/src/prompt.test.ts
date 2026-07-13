@@ -41,16 +41,34 @@ describe("buildOpeningSystemPrompt", () => {
 });
 
 describe("historyToMessages", () => {
-  it("maps interior gm turns to assistant and player turns to user, dropping the leading gm opening", () => {
+  it("wraps interior gm turns as the JSON envelope the model is asked to produce", () => {
+    // The model few-shots off its own prior assistant turns. If those are bare
+    // prose (not the JSON envelope), it eventually drops the envelope too and
+    // parseGmReply fails. Reconstruct the envelope so the conversation is
+    // self-consistent with the system prompt's format instruction.
     const msgs = historyToMessages([
       { role: "gm", text: "Ihr steht vor der Höhle." },
       { role: "player", text: "Ich schleiche hinein." },
-      { role: "gm", text: "Es ist dunkel." },
+      { role: "gm", text: "Es ist dunkel.", diceRequest: null },
     ]);
     expect(msgs).toEqual([
       { role: "user", content: "Ich schleiche hinein." },
-      { role: "assistant", content: "Es ist dunkel." },
+      { role: "assistant", content: '{"narration":"Es ist dunkel.","diceRequest":null}' },
     ]);
+  });
+
+  it("includes a gm turn's diceRequest in the reconstructed envelope", () => {
+    const msgs = historyToMessages([
+      { role: "player", text: "Ich greife an." },
+      { role: "gm", text: "Wirf!", diceRequest: { reason: "Angriff", hint: "W20 + STR" } },
+    ]);
+    expect(msgs[1]).toEqual({
+      role: "assistant",
+      content: JSON.stringify({
+        narration: "Wirf!",
+        diceRequest: { reason: "Angriff", hint: "W20 + STR" },
+      }),
+    });
   });
 
   it("returns an array beginning with a user message", () => {

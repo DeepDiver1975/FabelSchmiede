@@ -3,15 +3,17 @@ import { Session } from "./session.js";
 import type { StoredTurn } from "./types.js";
 
 describe("Session", () => {
-  it("hydrates history from stored turns, keeping role and text", () => {
+  it("hydrates history from stored turns, keeping role, text, and diceRequest", () => {
+    // diceRequest must survive: historyToMessages folds it back into the JSON
+    // envelope when replaying gm turns to the model.
     const turns: StoredTurn[] = [
-      { role: "gm", text: "Ihr steht am Eingang.", diceRequest: null },
+      { role: "gm", text: "Wirf!", diceRequest: { reason: "Angriff", hint: "W20 + STR" } },
       { role: "player", text: "Ich gehe hinein.", diceRequest: null },
     ];
     const s = new Session(turns);
     expect(s.getHistory()).toEqual([
-      { role: "gm", text: "Ihr steht am Eingang." },
-      { role: "player", text: "Ich gehe hinein." },
+      { role: "gm", text: "Wirf!", diceRequest: { reason: "Angriff", hint: "W20 + STR" } },
+      { role: "player", text: "Ich gehe hinein.", diceRequest: null },
     ]);
   });
 
