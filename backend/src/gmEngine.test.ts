@@ -36,6 +36,24 @@ describe("generateGmReply", () => {
     expect(arg.system).toContain("Goblins im Nebelwald");
     expect(arg.messages).toEqual([{ role: "user", content: "Ich gehe hinein." }]);
   });
+
+  it("folds the opening narration into the system prompt so its facts survive, while dropping it from messages", async () => {
+    const withOpening: Turn[] = [
+      { role: "gm", text: "Ihr betretet das Dorf Einwindtal. Am Waldrand lauern vier Goblins." },
+      { role: "player", text: "Ich schleiche mich an." },
+      { role: "gm", text: "Du kommst näher an das Lager." },
+      { role: "player", text: "Wie viele Gegner sehe ich?" },
+    ];
+    const call = vi.fn().mockResolvedValue('{"narration":"ok","diceRequest":null}');
+    await generateGmReply(withOpening, premise, call);
+    const arg = call.mock.calls[0][0];
+    // Opening facts are preserved in the system prompt...
+    expect(arg.system).toContain("Einwindtal");
+    expect(arg.system).toContain("vier Goblins");
+    // ...but the opening is NOT re-sent as a message (Bedrock needs a leading user msg).
+    expect(arg.messages[0]).toEqual({ role: "user", content: "Ich schleiche mich an." });
+    expect(arg.messages.some((m: { content: string }) => m.content.includes("Einwindtal"))).toBe(false);
+  });
 });
 
 describe("generateOpening", () => {
