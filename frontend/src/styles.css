@@ -32,3 +32,18 @@ button:disabled { opacity: 0.5; cursor: default; }
 .story { line-height: 1.6; max-width: 60ch; }
 .story h2 { margin-top: 0; }
 .hint { opacity: 0.7; }
+
+.party-panel { margin: 1rem 0; border: 1px solid #4a3f30; border-radius: 6px; padding: 0.5rem 0.75rem; }
+.party-toggle { background: none; border: none; color: #e8e0d0; font-size: 1rem; padding: 0.25rem 0; cursor: pointer; }
+.party-body { margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.75rem; }
+.party-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.party-member { border-bottom: 1px solid #2a2118; padding-bottom: 0.5rem; }
+.party-member-head { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
+.party-member-actions { display: flex; gap: 0.25rem; }
+.party-member-actions button, .party-member-expand { font-size: 0.85rem; padding: 0.25rem 0.5rem; }
+.party-narrative { margin: 0.5rem 0 0; font-size: 0.9rem; }
+.party-narrative dt { font-weight: 600; color: #9db4c0; }
+.party-narrative dd { margin: 0 0 0.4rem; }
+.party-form { display: flex; flex-direction: column; gap: 0.5rem; }
+.party-form textarea { font: inherit; padding: 0.5rem; background: #12100c; color: #e8e0d0; border: 1px solid #4a3f30; border-radius: 4px; }
+.party-form-actions { display: flex; gap: 0.5rem; }
