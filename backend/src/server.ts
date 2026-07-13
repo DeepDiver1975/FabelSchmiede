@@ -9,7 +9,7 @@ import {
 } from "./gmEngine.js";
 import { createBedrockCaller } from "./bedrockCaller.js";
 import { CampaignStore } from "./campaignStore.js";
-import type { DiceRequest, StoredTurn } from "./types.js";
+import type { Character, CharacterInput, DiceRequest, StoredTurn } from "./types.js";
 
 const VERHASPELT = "Der Spielleiter hat sich verhaspelt — bitte nochmal.";
 
@@ -29,7 +29,8 @@ export function buildServer(call: ClaudeCaller, store: CampaignStore): FastifyIn
     const campaign = store.getCampaign(id);
     if (!campaign) return null;
     const turns = store.getTurns(id);
-    return { campaign, turns, pendingDice: pendingFrom(turns) };
+    const characters = store.listCharacters(id);
+    return { campaign, turns, pendingDice: pendingFrom(turns), characters };
   }
 
   // Shared handler for action + roll: never persist unless the GM reply parses.
@@ -39,11 +40,12 @@ export function buildServer(call: ClaudeCaller, store: CampaignStore): FastifyIn
     if (campaign.status === "finished")
       return reply.code(409).send({ error: "Diese Kampagne ist abgeschlossen." });
 
+    const characters = store.listCharacters(id);
     const session = new Session(store.getTurns(id));
     session.addPlayerTurn(playerText);
     let gm;
     try {
-      gm = await generateGmReply(session.getHistory(), campaign.premise, call);
+      gm = await generateGmReply(session.getHistory(), campaign.premise, call, characters);
     } catch (err) {
       reply.log.error({ err, campaignId: id, playerText }, "GM reply failed (verhaspelt)");
       return reply.code(500).send({ error: VERHASPELT });
@@ -88,6 +90,72 @@ export function buildServer(call: ClaudeCaller, store: CampaignStore): FastifyIn
     return state;
   });
 
+  app.get<{ Params: { id: string } }>("/api/campaigns/:id/characters", async (req, reply) => {
+    const campaign = store.getCampaign(req.params.id);
+    if (!campaign) return reply.code(404).send({ error: "Kampagne nicht gefunden." });
+    return store.listCharacters(req.params.id);
+  });
+
+  app.post<{ Params: { id: string }; Body: CharacterInput }>(
+    "/api/campaigns/:id/characters",
+    async (req, reply) => {
+      const campaign = store.getCampaign(req.params.id);
+      if (!campaign) return reply.code(404).send({ error: "Kampagne nicht gefunden." });
+      if (campaign.status === "finished")
+        return reply.code(409).send({ error: "Diese Kampagne ist abgeschlossen." });
+      const name = req.body?.name?.trim();
+      const concept = req.body?.concept?.trim();
+      if (!name || !concept)
+        return reply.code(400).send({ error: "Name und Konzept sind erforderlich." });
+      const character = store.createCharacter(req.params.id, { ...req.body, name, concept });
+      return reply.code(201).send(character);
+    },
+  );
+
+  app.patch<{ Params: { id: string; cid: string }; Body: Partial<CharacterInput> }>(
+    "/api/campaigns/:id/characters/:cid",
+    async (req, reply) => {
+      const campaign = store.getCampaign(req.params.id);
+      if (!campaign) return reply.code(404).send({ error: "Kampagne nicht gefunden." });
+      const character = store.getCharacter(req.params.cid);
+      if (!character || character.campaign_id !== req.params.id)
+        return reply.code(404).send({ error: "Charakter nicht gefunden." });
+      if (campaign.status === "finished")
+        return reply.code(409).send({ error: "Diese Kampagne ist abgeschlossen." });
+      const body = req.body ?? {};
+      const name = body.name !== undefined ? body.name.trim() : character.name;
+      const concept = body.concept !== undefined ? body.concept.trim() : character.concept;
+      if (!name || !concept)
+        return reply.code(400).send({ error: "Name und Konzept sind erforderlich." });
+      const updated: Character = {
+        ...character,
+        name,
+        concept,
+        ...(body.level !== undefined ? { level: body.level } : {}),
+        ...(body.narrative !== undefined ? { narrative: body.narrative } : {}),
+        ...(body.abilities !== undefined ? { abilities: body.abilities } : {}),
+        ...(body.resources !== undefined ? { resources: body.resources } : {}),
+      };
+      store.updateCharacter(updated);
+      return updated;
+    },
+  );
+
+  app.delete<{ Params: { id: string; cid: string } }>(
+    "/api/campaigns/:id/characters/:cid",
+    async (req, reply) => {
+      const campaign = store.getCampaign(req.params.id);
+      if (!campaign) return reply.code(404).send({ error: "Kampagne nicht gefunden." });
+      const character = store.getCharacter(req.params.cid);
+      if (!character || character.campaign_id !== req.params.id)
+        return reply.code(404).send({ error: "Charakter nicht gefunden." });
+      if (campaign.status === "finished")
+        return reply.code(409).send({ error: "Diese Kampagne ist abgeschlossen." });
+      store.deleteCharacter(req.params.cid);
+      return reply.code(204).send();
+    },
+  );
+
   app.post<{ Params: { id: string }; Body: { text: string } }>(
     "/api/campaigns/:id/action",
     async (req, reply) => {
@@ -122,7 +190,8 @@ export function buildServer(call: ClaudeCaller, store: CampaignStore): FastifyIn
         .send({ error: "Nur abgeschlossene Kampagnen können nacherzählt werden." });
     let markdown;
     try {
-      markdown = await generateStory(store.getTurns(campaign.id), campaign, call);
+      const characters = store.listCharacters(campaign.id);
+      markdown = await generateStory(store.getTurns(campaign.id), campaign, call, characters);
     } catch (err) {
       reply.log.error({ err, campaignId: campaign.id }, "story generation failed (verhaspelt)");
       return reply.code(500).send({ error: VERHASPELT });

@@ -217,4 +217,143 @@ describe("server", () => {
     expect(firstArg).toHaveProperty("err");
     await bad.close();
   });
+
+  it("GET /api/campaigns/:id/characters returns 404 for an unknown campaign", async () => {
+    const { app } = setup();
+    const res = await app.inject({ method: "GET", url: "/api/campaigns/nope/characters" });
+    expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it("creates, lists, updates, and deletes a character", async () => {
+    const { app } = setup();
+    const { campaign } = await createCampaign(app);
+
+    const created = await app.inject({
+      method: "POST",
+      url: `/api/campaigns/${campaign.id}/characters`,
+      payload: { name: "Thorin", concept: "Zwergischer Krieger" },
+    });
+    expect(created.statusCode).toBe(201);
+    const character = created.json();
+    expect(character.name).toBe("Thorin");
+
+    const listed = await app.inject({ method: "GET", url: `/api/campaigns/${campaign.id}/characters` });
+    expect(listed.json()).toHaveLength(1);
+
+    const updated = await app.inject({
+      method: "PATCH",
+      url: `/api/campaigns/${campaign.id}/characters/${character.id}`,
+      payload: { name: "Thorin", concept: "Zwergischer Krieger", narrative: { ideal: "Ehre" } },
+    });
+    expect(updated.statusCode).toBe(200);
+    expect(updated.json().narrative).toEqual({ ideal: "Ehre" });
+    expect(updated.json().name).toBe("Thorin");
+
+    const deleted = await app.inject({
+      method: "DELETE",
+      url: `/api/campaigns/${campaign.id}/characters/${character.id}`,
+    });
+    expect(deleted.statusCode).toBe(204);
+
+    const afterDelete = await app.inject({ method: "GET", url: `/api/campaigns/${campaign.id}/characters` });
+    expect(afterDelete.json()).toHaveLength(0);
+    await app.close();
+  });
+
+  it("rejects character creation with an empty name or concept with 400", async () => {
+    const { app } = setup();
+    const { campaign } = await createCampaign(app);
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/campaigns/${campaign.id}/characters`,
+      payload: { name: "", concept: "" },
+    });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it("404s on PATCH/DELETE for an unknown character id", async () => {
+    const { app } = setup();
+    const { campaign } = await createCampaign(app);
+    const patch = await app.inject({
+      method: "PATCH",
+      url: `/api/campaigns/${campaign.id}/characters/nope`,
+      payload: { name: "x", concept: "y" },
+    });
+    expect(patch.statusCode).toBe(404);
+    const del = await app.inject({
+      method: "DELETE",
+      url: `/api/campaigns/${campaign.id}/characters/nope`,
+    });
+    expect(del.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it("blocks character CRUD on a finished campaign with 409", async () => {
+    const { app } = setup();
+    const { campaign } = await createCampaign(app);
+    const created = await app.inject({
+      method: "POST",
+      url: `/api/campaigns/${campaign.id}/characters`,
+      payload: { name: "Thorin", concept: "Krieger" },
+    });
+    const character = created.json();
+    await app.inject({ method: "POST", url: `/api/campaigns/${campaign.id}/finish` });
+
+    const postAfter = await app.inject({
+      method: "POST",
+      url: `/api/campaigns/${campaign.id}/characters`,
+      payload: { name: "Lyra", concept: "Magierin" },
+    });
+    expect(postAfter.statusCode).toBe(409);
+
+    const patchAfter = await app.inject({
+      method: "PATCH",
+      url: `/api/campaigns/${campaign.id}/characters/${character.id}`,
+      payload: { name: "Thorin II", concept: "Krieger" },
+    });
+    expect(patchAfter.statusCode).toBe(409);
+
+    const deleteAfter = await app.inject({
+      method: "DELETE",
+      url: `/api/campaigns/${campaign.id}/characters/${character.id}`,
+    });
+    expect(deleteAfter.statusCode).toBe(409);
+    await app.close();
+  });
+
+  it("/state includes the party roster", async () => {
+    const { app } = setup();
+    const { campaign } = await createCampaign(app);
+    await app.inject({
+      method: "POST",
+      url: `/api/campaigns/${campaign.id}/characters`,
+      payload: { name: "Thorin", concept: "Krieger" },
+    });
+    const res = await app.inject({ method: "GET", url: `/api/campaigns/${campaign.id}/state` });
+    expect(res.json().characters).toHaveLength(1);
+    expect(res.json().characters[0].name).toBe("Thorin");
+    await app.close();
+  });
+
+  it("threads a party member's name into the GM call", async () => {
+    const store = new CampaignStore(openDb(":memory:"));
+    const capture = vi.fn().mockResolvedValue('{"narration":"ok","diceRequest":null}');
+    const app = buildServer(capture, store);
+    const { campaign } = await createCampaign(app);
+    await app.inject({
+      method: "POST",
+      url: `/api/campaigns/${campaign.id}/characters`,
+      payload: { name: "Thorin", concept: "Krieger" },
+    });
+    await app.inject({
+      method: "POST",
+      url: `/api/campaigns/${campaign.id}/action`,
+      payload: { text: "Ich schaue mich um." },
+    });
+    const lastCall = capture.mock.calls[capture.mock.calls.length - 1][0];
+    expect(lastCall.system).toContain("Thorin");
+    await app.close();
+  });
 });
