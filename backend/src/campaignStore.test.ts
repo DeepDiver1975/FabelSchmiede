@@ -92,4 +92,75 @@ describe("CampaignStore", () => {
     expect(second.markdown).toBe("# Zweite Fassung");
     expect(store.getStory(c.id)!.markdown).toBe("# Zweite Fassung");
   });
+
+  it("creates a minimal character (core fields only) and reads it back", () => {
+    const store = freshStore();
+    const c = store.createCampaign("C", "p");
+    const created = store.createCharacter(c.id, { name: "Lyra", concept: "Magierin" });
+    expect(created.id).toBeTruthy();
+    expect(created.campaign_id).toBe(c.id);
+    expect(created.level).toBeUndefined();
+    expect(created.abilities).toBeUndefined();
+    const loaded = store.getCharacter(created.id)!;
+    expect(loaded).toEqual(created);
+  });
+
+  it("round-trips a full character sheet through JSON columns", () => {
+    const store = freshStore();
+    const c = store.createCampaign("C", "p");
+    const created = store.createCharacter(c.id, {
+      name: "Lyra",
+      concept: "Magierin",
+      level: 3,
+      narrative: { backstory: "Aus dem Nebelwald.", flaw: "Zu neugierig." },
+      abilities: [{ id: "firewall", name: "Feuerwall", minLevel: 3, slotCost: 1 }],
+      resources: [{ id: "slots1", name: "Zauberplätze", used: 0, available: 2 }],
+    });
+    const loaded = store.getCharacter(created.id)!;
+    expect(loaded.level).toBe(3);
+    expect(loaded.narrative).toEqual({ backstory: "Aus dem Nebelwald.", flaw: "Zu neugierig." });
+    expect(loaded.abilities).toEqual([{ id: "firewall", name: "Feuerwall", minLevel: 3, slotCost: 1 }]);
+    expect(loaded.resources).toEqual([{ id: "slots1", name: "Zauberplätze", used: 0, available: 2 }]);
+  });
+
+  it("scopes characters to their campaign and lists them in creation order", () => {
+    const store = freshStore();
+    const a = store.createCampaign("A", "p");
+    const b = store.createCampaign("B", "p");
+    store.createCharacter(a.id, { name: "Erste", concept: "Kriegerin" });
+    store.createCharacter(a.id, { name: "Zweite", concept: "Schurke" });
+    store.createCharacter(b.id, { name: "Fremde", concept: "Barde" });
+    expect(store.listCharacters(a.id).map((ch) => ch.name)).toEqual(["Erste", "Zweite"]);
+    expect(store.listCharacters(b.id).map((ch) => ch.name)).toEqual(["Fremde"]);
+  });
+
+  it("getCharacter returns null for an unknown id", () => {
+    expect(freshStore().getCharacter("nope")).toBeNull();
+  });
+
+  it("persists a mechanical mutation (spent resource pool) via updateCharacter", () => {
+    const store = freshStore();
+    const c = store.createCampaign("C", "p");
+    const created = store.createCharacter(c.id, {
+      name: "Lyra",
+      concept: "Magierin",
+      resources: [{ id: "slots1", name: "Zauberplätze", used: 0, available: 2 }],
+    });
+    store.updateCharacter({
+      ...created,
+      resources: [{ id: "slots1", name: "Zauberplätze", used: 1, available: 2 }],
+    });
+    expect(store.getCharacter(created.id)!.resources![0].used).toBe(1);
+  });
+
+  it("deleteCharacter removes only the target and is campaign-scoped", () => {
+    const store = freshStore();
+    const c = store.createCampaign("C", "p");
+    const a = store.createCharacter(c.id, { name: "Erste", concept: "Kriegerin" });
+    const b = store.createCharacter(c.id, { name: "Zweite", concept: "Schurke" });
+    store.deleteCharacter(a.id);
+    expect(store.getCharacter(a.id)).toBeNull();
+    expect(store.getCharacter(b.id)).not.toBeNull();
+    expect(store.listCharacters(c.id).map((ch) => ch.name)).toEqual(["Zweite"]);
+  });
 });

@@ -40,6 +40,38 @@ describe("buildOpeningSystemPrompt", () => {
   });
 });
 
+describe("buildSystemPrompt party injection", () => {
+  const character = { id: "1", campaign_id: "c", name: "Thorin", concept: "Zwergischer Krieger", created_at: "x" };
+
+  it("splices in the party roster when characters are present", () => {
+    const p = buildSystemPrompt("Goblins im Nebelwald", undefined, [character]);
+    expect(p).toContain("GRUPPE");
+    expect(p).toContain("Thorin");
+  });
+
+  it("is byte-for-byte unchanged when the party is empty", () => {
+    expect(buildSystemPrompt("Goblins im Nebelwald", undefined, [])).toBe(
+      buildSystemPrompt("Goblins im Nebelwald", undefined),
+    );
+  });
+});
+
+describe("buildOpeningSystemPrompt party injection", () => {
+  const character = { id: "1", campaign_id: "c", name: "Lyra", concept: "Elfische Magierin", created_at: "x" };
+
+  it("splices in the party roster when characters are present", () => {
+    const p = buildOpeningSystemPrompt("Ein Raumhafen auf dem Mars", [character]);
+    expect(p).toContain("GRUPPE");
+    expect(p).toContain("Lyra");
+  });
+
+  it("is byte-for-byte unchanged when the party is empty", () => {
+    expect(buildOpeningSystemPrompt("Ein Raumhafen auf dem Mars", [])).toBe(
+      buildOpeningSystemPrompt("Ein Raumhafen auf dem Mars"),
+    );
+  });
+});
+
 describe("historyToMessages", () => {
   it("wraps interior gm turns as the JSON envelope the model is asked to produce", () => {
     // The model few-shots off its own prior assistant turns. If those are bare

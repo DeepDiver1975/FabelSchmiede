@@ -2,7 +2,7 @@ import { buildSystemPrompt, buildOpeningSystemPrompt, historyToMessages } from "
 import { buildStorySystemPrompt, renderTranscript } from "./storyPrompt.js";
 import { parseGmReply } from "./parseReply.js";
 import { GM_REPLY_SCHEMA } from "./types.js";
-import type { GmReply, StoredTurn, Turn } from "./types.js";
+import type { Character, GmReply, StoredTurn, Turn } from "./types.js";
 
 export type ClaudeCaller = (args: {
   system: string;
@@ -28,16 +28,25 @@ export async function generateGmReply(
   history: Turn[],
   premise: string,
   call: ClaudeCaller,
+  characters: Character[] = [],
 ): Promise<GmReply> {
   // The opening narration (first gm turn) is dropped from the message list by
   // historyToMessages, so fold its canonical facts into the system prompt.
   const opening = history[0]?.role === "gm" ? history[0].text : undefined;
-  return callWithRetry(buildSystemPrompt(premise, opening), historyToMessages(history), call);
+  return callWithRetry(
+    buildSystemPrompt(premise, opening, characters),
+    historyToMessages(history),
+    call,
+  );
 }
 
-export async function generateOpening(premise: string, call: ClaudeCaller): Promise<GmReply> {
+export async function generateOpening(
+  premise: string,
+  call: ClaudeCaller,
+  characters: Character[] = [],
+): Promise<GmReply> {
   return callWithRetry(
-    buildOpeningSystemPrompt(premise),
+    buildOpeningSystemPrompt(premise, characters),
     [{ role: "user", content: "Beginne das Abenteuer." }],
     call,
   );
@@ -47,9 +56,10 @@ export async function generateStory(
   turns: StoredTurn[],
   campaign: { name: string; premise: string },
   call: ClaudeCaller,
+  characters: Character[] = [],
 ): Promise<string> {
   const markdown = await call({
-    system: buildStorySystemPrompt(campaign),
+    system: buildStorySystemPrompt(campaign, characters),
     messages: [{ role: "user", content: renderTranscript(turns) }],
   });
   if (!markdown.trim()) {

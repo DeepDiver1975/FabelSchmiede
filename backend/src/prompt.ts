@@ -1,5 +1,6 @@
 import { SCENE_BRIEF } from "./scene.js";
-import type { Turn } from "./types.js";
+import { renderParty } from "./partyPrompt.js";
+import type { Character, Turn } from "./types.js";
 
 const CONTINUITY_RULES = `
 KONSISTENZ (SEHR WICHTIG):
@@ -39,14 +40,19 @@ function openingSection(opening: string | undefined): string {
   return text ? `\n\nBISHERIGER VERLAUF (so hat das Abenteuer begonnen — bleibe dazu konsistent):\n${text}` : "";
 }
 
-export function buildSystemPrompt(premise: string, opening?: string): string {
+function partySection(party: Character[] | undefined): string {
+  const roster = party ? renderParty(party) : "";
+  return roster ? `\n\n${roster}` : "";
+}
+
+export function buildSystemPrompt(premise: string, opening?: string, party?: Character[]): string {
   return `
 Du bist der Spielleiter (Game Master).
 
 ${SCENE_BRIEF}
 
 SZENE DIESER KAMPAGNE:
-${premise}${openingSection(opening)}
+${premise}${openingSection(opening)}${partySection(party)}
 
 ${CONTINUITY_RULES}
 
@@ -54,14 +60,14 @@ ${DICE_AND_FORMAT_RULES}
 `.trim();
 }
 
-export function buildOpeningSystemPrompt(premise: string): string {
+export function buildOpeningSystemPrompt(premise: string, party?: Character[]): string {
   return `
 Du bist der Spielleiter (Game Master) und eröffnest eine neue Kampagne.
 
 ${SCENE_BRIEF}
 
 SZENE DIESER KAMPAGNE:
-${premise}
+${premise}${partySection(party)}
 
 Erzähle eine kurze, atmosphärische Eröffnungsszene auf Deutsch, die die Gruppe
 in diese Ausgangslage hineinversetzt, und ende mit einer offenen Frage wie
