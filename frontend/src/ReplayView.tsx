@@ -1,5 +1,29 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { api, type Story } from "./api.js";
+import { splitParagraphs } from "./prose.js";
+
+// Render the story markdown: "# " lines become headings, and the prose between
+// them is broken into paragraphs via the shared splitter.
+function renderStory(markdown: string): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  let buffer: string[] = [];
+  const flush = (key: string) => {
+    splitParagraphs(buffer.join("\n")).forEach((p, i) =>
+      nodes.push(<p key={`${key}-${i}`}>{p}</p>),
+    );
+    buffer = [];
+  };
+  markdown.split("\n").forEach((line, i) => {
+    if (line.startsWith("# ")) {
+      flush(`p${i}`);
+      nodes.push(<h2 key={`h${i}`}>{line.slice(2)}</h2>);
+    } else {
+      buffer.push(line);
+    }
+  });
+  flush("end");
+  return nodes;
+}
 
 export function ReplayView({
   campaignId,
@@ -54,17 +78,7 @@ export function ReplayView({
       {busy && <p className="busy">Der Spielleiter verfasst die Geschichte…</p>}
 
       {story ? (
-        <article className="story">
-          {story.markdown.split("\n").map((line, i) =>
-            line.startsWith("# ") ? (
-              <h2 key={i}>{line.slice(2)}</h2>
-            ) : line.trim() === "" ? (
-              <br key={i} />
-            ) : (
-              <p key={i}>{line}</p>
-            ),
-          )}
-        </article>
+        <article className="story">{renderStory(story.markdown)}</article>
       ) : (
         !busy && <p className="hint">Noch keine Geschichte. Klicke „Als Geschichte erzählen“.</p>
       )}

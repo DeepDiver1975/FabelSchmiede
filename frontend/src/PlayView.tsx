@@ -7,6 +7,7 @@ import {
   type CharacterNarrative,
   type CampaignBrief,
 } from "./api.js";
+import { splitParagraphs } from "./prose.js";
 
 type CharacterForm = { id?: string; name: string; concept: string; narrative: CharacterNarrative };
 
@@ -445,27 +446,36 @@ export function PlayView({
               ? "SL"
               : "Ihr";
           return (
-            <p key={i} className={`${t.role}${aside ? " aside" : ""}`}>
-              <strong>{label}:</strong> {t.text}
-              {state.ttsEnabled && t.role === "gm" && (
-                <button
-                  className="turn-audio"
-                  onClick={() => playTurn(t.seq)}
-                  title="Vorlesen"
-                >
-                  ▶
-                </button>
-              )}
-            </p>
+            <div key={i} className={`turn ${t.role}${aside ? " aside" : ""}`}>
+              <span className="speaker">
+                {label}
+                {state.ttsEnabled && t.role === "gm" && (
+                  <button
+                    className="turn-audio"
+                    onClick={() => playTurn(t.seq)}
+                    title="Vorlesen"
+                  >
+                    ▶
+                  </button>
+                )}
+              </span>
+              {splitParagraphs(t.text).map((para, j) => (
+                <p key={j}>{para}</p>
+              ))}
+            </div>
           );
         })}
         {pendingTurn && (
-          <p
-            className={`player pending${pendingTurn.kind === "aside" ? " aside" : ""}${pendingTurn.failed ? " failed" : ""}`}
+          <div
+            className={`turn player pending${pendingTurn.kind === "aside" ? " aside" : ""}${pendingTurn.failed ? " failed" : ""}`}
           >
-            <strong>{pendingTurn.kind === "aside" ? "Ihr (Frage)" : "Ihr"}:</strong>{" "}
-            {pendingTurnText(pendingTurn)}
-          </p>
+            <span className="speaker">
+              {pendingTurn.kind === "aside" ? "Ihr (Frage)" : "Ihr"}
+            </span>
+            {splitParagraphs(pendingTurnText(pendingTurn)).map((para, j) => (
+              <p key={j}>{para}</p>
+            ))}
+          </div>
         )}
       </section>
 

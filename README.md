@@ -1,7 +1,8 @@
-# rpg.ai — AI Dungeon Master (Fun-Test)
+# Fabelschmiede — dein KI-Spielleiter
 
-Smallest possible test of whether an AI GM is fun: one hardcoded German D&D
-scene, Claude narrates via AWS Bedrock, you roll your own physical dice.
+An AI game master ("Spielleiter") for a German fantasy tabletop scene (D&D
+5e-style rules): Claude narrates via AWS Bedrock, you roll your own physical
+dice. The name means "Fable Forge" — where the stories are forged.
 
 ## Prerequisites
 - Node 20+
