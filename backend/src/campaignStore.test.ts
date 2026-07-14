@@ -186,3 +186,39 @@ describe("CampaignStore", () => {
     expect(store.listCharacters(c.id).map((ch) => ch.name)).toEqual(["Zweite"]);
   });
 });
+
+import type { CampaignPlan } from "./types.js";
+
+const aPlan: CampaignPlan = {
+  title: "Der Nebelwald",
+  brief: "Ein Dorf bittet um Hilfe.",
+  backstory: "Ein Kult.",
+  npcs: [{ name: "Mara", role: "Wirtin", description: "nervös", secret: "Spitzel" }],
+  locations: [{ name: "Gasthaus", description: "warm", secret: "" }],
+  arc: { outline: "Ritual", hooks: ["Kinder"], branchPoints: ["Fork"] },
+};
+
+describe("CampaignStore plans", () => {
+  it("saves and reads back a plan", () => {
+    const store = freshStore();
+    const c = store.createCampaign("C", "p");
+    const saved = store.savePlan(c.id, aPlan);
+    expect(saved.generated_at).toBeTruthy();
+    const got = store.getPlan(c.id);
+    expect(got?.plan).toEqual(aPlan);
+  });
+
+  it("getPlan returns null when none stored", () => {
+    const store = freshStore();
+    const c = store.createCampaign("C", "p");
+    expect(store.getPlan(c.id)).toBeNull();
+  });
+
+  it("savePlan overwrites an existing plan for the campaign", () => {
+    const store = freshStore();
+    const c = store.createCampaign("C", "p");
+    store.savePlan(c.id, aPlan);
+    store.savePlan(c.id, { ...aPlan, title: "Neu" });
+    expect(store.getPlan(c.id)?.plan.title).toBe("Neu");
+  });
+});

@@ -30,6 +30,12 @@ export function migrate(db: Database.Database): void {
       generated_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS campaign_plans (
+      campaign_id TEXT PRIMARY KEY REFERENCES campaigns(id),
+      plan TEXT NOT NULL,
+      generated_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS characters (
       id TEXT PRIMARY KEY,
       campaign_id TEXT NOT NULL REFERENCES campaigns(id),

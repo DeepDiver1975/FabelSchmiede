@@ -3,12 +3,14 @@ import { randomUUID } from "node:crypto";
 import type {
   Ability,
   Campaign,
+  CampaignPlan,
   CampaignSummary,
   Character,
   CharacterInput,
   CharacterNarrative,
   DiceRequest,
   ResourcePool,
+  StoredPlan,
   StoredTurn,
   Story,
   TurnKind,
@@ -123,6 +125,25 @@ export class CampaignStore {
       .prepare("SELECT markdown, generated_at FROM stories WHERE campaign_id = ?")
       .get(campaignId);
     return (row as Story) ?? null;
+  }
+
+  savePlan(campaignId: string, plan: CampaignPlan): StoredPlan {
+    const generated_at = new Date().toISOString();
+    this.db
+      .prepare(
+        `INSERT INTO campaign_plans (campaign_id, plan, generated_at) VALUES (?, ?, ?)
+         ON CONFLICT(campaign_id) DO UPDATE SET plan = excluded.plan, generated_at = excluded.generated_at`,
+      )
+      .run(campaignId, JSON.stringify(plan), generated_at);
+    return { plan, generated_at };
+  }
+
+  getPlan(campaignId: string): StoredPlan | null {
+    const row = this.db
+      .prepare("SELECT plan, generated_at FROM campaign_plans WHERE campaign_id = ?")
+      .get(campaignId) as { plan: string; generated_at: string } | undefined;
+    if (!row) return null;
+    return { plan: JSON.parse(row.plan) as CampaignPlan, generated_at: row.generated_at };
   }
 
   createCharacter(campaignId: string, input: CharacterInput): Character {
