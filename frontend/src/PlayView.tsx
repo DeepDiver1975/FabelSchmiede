@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   api,
   type State,
@@ -259,6 +259,12 @@ export function PlayView({
   const [error, setError] = useState<string | null>(null);
   const [pendingTurn, setPendingTurn] = useState<PendingTurn | null>(null);
   const [asideMode, setAsideMode] = useState(false);
+  // TTS playback. One shared <audio> element; the mute choice persists so the
+  // table can play silently. Audio errors are swallowed — the text always stays.
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const lastPlayedSeq = useRef(-1);
+  const [muted, setMuted] = useState(() => localStorage.getItem("tts-muted") === "1");
+  const [speaking, setSpeaking] = useState(false);
 
   const id = state.campaign.id;
   const pending = state.pendingDice;
@@ -363,11 +369,56 @@ export function PlayView({
     }
   }
 
+  function playTurn(seq: number) {
+    if (!state.ttsEnabled) return;
+    let el = audioRef.current;
+    if (!el) {
+      el = new Audio();
+      el.addEventListener("playing", () => setSpeaking(true));
+      el.addEventListener("ended", () => setSpeaking(false));
+      el.addEventListener("pause", () => setSpeaking(false));
+      el.addEventListener("error", () => setSpeaking(false));
+      audioRef.current = el;
+    }
+    el.src = api.turnAudioUrl(id, seq);
+    // Autoplay policy or synthesis errors are non-fatal — the transcript stays.
+    void el.play().catch(() => setSpeaking(false));
+  }
+
+  function toggleMuted() {
+    setMuted((m) => {
+      const next = !m;
+      localStorage.setItem("tts-muted", next ? "1" : "0");
+      if (next) audioRef.current?.pause();
+      return next;
+    });
+  }
+
+  // Autoplay the latest gm narration once, when it first appears. Every new gm
+  // turn is marked seen even while muted, so unmuting never replays an old one.
+  useEffect(() => {
+    if (!state.ttsEnabled) return;
+    const last = state.turns[state.turns.length - 1];
+    if (!last || last.role !== "gm" || last.seq <= lastPlayedSeq.current) return;
+    lastPlayedSeq.current = last.seq;
+    if (!muted) playTurn(last.seq);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.turns]);
+
   return (
     <main className="app">
       <header>
         <h1>{state.campaign.name}</h1>
         <div className="header-actions">
+          {state.ttsEnabled && (
+            <button
+              className={`tts-toggle${speaking ? " speaking" : ""}`}
+              onClick={toggleMuted}
+              title={muted ? "Sprachausgabe einschalten" : "Sprachausgabe stummschalten"}
+            >
+              {muted ? "🔇" : "🔊"}
+            </button>
+          )}
           <button onClick={onBack} disabled={busy}>← Übersicht</button>
           <button onClick={finish} disabled={busy}>Kampagne abschließen</button>
         </div>
@@ -396,6 +447,15 @@ export function PlayView({
           return (
             <p key={i} className={`${t.role}${aside ? " aside" : ""}`}>
               <strong>{label}:</strong> {t.text}
+              {state.ttsEnabled && t.role === "gm" && (
+                <button
+                  className="turn-audio"
+                  onClick={() => playTurn(t.seq)}
+                  title="Vorlesen"
+                >
+                  ▶
+                </button>
+              )}
             </p>
           );
         })}
