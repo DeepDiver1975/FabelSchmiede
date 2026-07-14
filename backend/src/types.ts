@@ -45,6 +45,10 @@ export type StoredTurn = {
   text: string;
   diceRequest: DiceRequest | null;
   kind?: TurnKind;
+  // Per-campaign turn index (contiguous 0..N), assigned by the store. Optional
+  // on the type so in-memory turn literals need not set it; getTurns always
+  // populates it so clients can address a turn's audio by seq.
+  seq?: number;
 };
 
 export type Story = {

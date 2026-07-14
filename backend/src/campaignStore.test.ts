@@ -44,13 +44,14 @@ describe("CampaignStore", () => {
     });
     const turns = store.getTurns(c.id);
     expect(turns).toEqual([
-      { role: "gm", text: "Ihr steht am Eingang.", diceRequest: null, kind: "story" },
-      { role: "player", text: "Ich gehe hinein.", diceRequest: null, kind: "story" },
+      { role: "gm", text: "Ihr steht am Eingang.", diceRequest: null, kind: "story", seq: 0 },
+      { role: "player", text: "Ich gehe hinein.", diceRequest: null, kind: "story", seq: 1 },
       {
         role: "gm",
         text: "Ein Goblin!",
         diceRequest: { reason: "Angriff", hint: "W20 + STR" },
         kind: "story",
+        seq: 2,
       },
     ]);
   });
@@ -95,12 +96,13 @@ describe("CampaignStore", () => {
     ]);
     const turns = store.getTurns(c.id);
     expect(turns).toEqual([
-      { role: "player", text: "Ich greife an.", diceRequest: null, kind: "story" },
+      { role: "player", text: "Ich greife an.", diceRequest: null, kind: "story", seq: 0 },
       {
         role: "gm",
         text: "Der Goblin weicht aus.",
         diceRequest: { reason: "Angriff", hint: "W20" },
         kind: "story",
+        seq: 1,
       },
     ]);
   });
@@ -220,5 +222,41 @@ describe("CampaignStore plans", () => {
     store.savePlan(c.id, aPlan);
     store.savePlan(c.id, { ...aPlan, title: "Neu" });
     expect(store.getPlan(c.id)?.plan.title).toBe("Neu");
+  });
+});
+
+describe("CampaignStore turn audio", () => {
+  it("getTurns exposes a contiguous seq per turn", () => {
+    const store = freshStore();
+    const c = store.createCampaign("C", "p");
+    store.appendTurn(c.id, { role: "gm", text: "Eröffnung", diceRequest: null });
+    store.appendTurn(c.id, { role: "player", text: "Ich gehe hinein.", diceRequest: null });
+    store.appendTurn(c.id, { role: "gm", text: "Der Gang ist dunkel.", diceRequest: null });
+    expect(store.getTurns(c.id).map((t) => t.seq)).toEqual([0, 1, 2]);
+  });
+
+  it("saves and reads back a turn's audio", () => {
+    const store = freshStore();
+    const c = store.createCampaign("C", "p");
+    const audio = Buffer.from([0x52, 0x49, 0x46, 0x46, 1, 2, 3]);
+    store.saveTurnAudio(c.id, 0, audio, "audio/wav", 42);
+    const got = store.getTurnAudio(c.id, 0);
+    expect(got?.contentType).toBe("audio/wav");
+    expect(Buffer.compare(got!.audio, audio)).toBe(0);
+  });
+
+  it("getTurnAudio returns null when none is stored", () => {
+    const store = freshStore();
+    const c = store.createCampaign("C", "p");
+    expect(store.getTurnAudio(c.id, 0)).toBeNull();
+  });
+
+  it("saveTurnAudio overwrites existing audio for the same (campaign, seq)", () => {
+    const store = freshStore();
+    const c = store.createCampaign("C", "p");
+    store.saveTurnAudio(c.id, 0, Buffer.from([1]), "audio/wav", 1);
+    store.saveTurnAudio(c.id, 0, Buffer.from([2, 2]), "audio/wav", 2);
+    const got = store.getTurnAudio(c.id, 0);
+    expect(Buffer.compare(got!.audio, Buffer.from([2, 2]))).toBe(0);
   });
 });

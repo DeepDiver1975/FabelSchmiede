@@ -36,6 +36,18 @@ export function migrate(db: Database.Database): void {
       generated_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS turn_audio (
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id),
+      seq INTEGER NOT NULL,
+      audio BLOB NOT NULL,
+      content_type TEXT NOT NULL,
+      -- character count of the synthesized text; a hook for future cost
+      -- tracking (#4). No cost logic lives here.
+      char_count INTEGER NOT NULL,
+      generated_at TEXT NOT NULL,
+      PRIMARY KEY (campaign_id, seq)
+    );
+
     CREATE TABLE IF NOT EXISTS characters (
       id TEXT PRIMARY KEY,
       campaign_id TEXT NOT NULL REFERENCES campaigns(id),
