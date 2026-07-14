@@ -6,10 +6,11 @@ import {
   generateAsideReply,
   generateOpening,
   generateStory,
-  type ClaudeCaller,
+  type LlmCaller,
 } from "./gmEngine.js";
 import { createBedrockCaller } from "./bedrockCaller.js";
 import { createAnthropicCaller } from "./anthropicCaller.js";
+import { createNimCaller } from "./nimCaller.js";
 import { CampaignStore } from "./campaignStore.js";
 import type { Character, CharacterInput, DiceRequest, StoredTurn, TurnKind } from "./types.js";
 
@@ -20,7 +21,7 @@ function pendingFrom(turns: StoredTurn[]): DiceRequest | null {
   return last && last.role === "gm" ? last.diceRequest : null;
 }
 
-export function buildServer(call: ClaudeCaller, store: CampaignStore): FastifyInstance {
+export function buildServer(call: LlmCaller, store: CampaignStore): FastifyInstance {
   // Enable Pino request logging outside tests; under vitest (NODE_ENV=test) the
   // request logs are just noise. Even when the logger is off, Fastify supplies a
   // no-op `app.log`, so the explicit error logging below still works.
@@ -228,6 +229,34 @@ export function buildServer(call: ClaudeCaller, store: CampaignStore): FastifyIn
   return app;
 }
 
+function selectCaller(): LlmCaller {
+  const provider = process.env.LLM_PROVIDER;
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const region = process.env.AWS_REGION;
+  const nimApiKey = process.env.NVIDIA_API_KEY;
+  const nimModel = process.env.NIM_MODEL ?? "meta/llama-3.3-70b-instruct";
+
+  if (provider === "nim") {
+    if (!nimApiKey) throw new Error("LLM_PROVIDER=nim requires NVIDIA_API_KEY to be set");
+    return createNimCaller(nimApiKey, nimModel);
+  }
+  if (provider === "anthropic") {
+    if (!apiKey) throw new Error("LLM_PROVIDER=anthropic requires ANTHROPIC_API_KEY to be set");
+    return createAnthropicCaller(apiKey);
+  }
+  if (provider === "bedrock") {
+    if (!region) throw new Error("LLM_PROVIDER=bedrock requires AWS_REGION to be set");
+    return createBedrockCaller(region);
+  }
+  // No explicit LLM_PROVIDER — preserve the original auto-detect behavior:
+  // ANTHROPIC_API_KEY takes precedence, Bedrock is the fallback.
+  if (apiKey) return createAnthropicCaller(apiKey);
+  if (region) return createBedrockCaller(region);
+  throw new Error(
+    "Set ANTHROPIC_API_KEY, AWS_REGION, or LLM_PROVIDER=nim with NVIDIA_API_KEY — copy .env.example to .env",
+  );
+}
+
 async function main() {
   const { config } = await import("dotenv");
   const { fileURLToPath } = await import("node:url");
@@ -238,16 +267,7 @@ async function main() {
   // (backend/src/) so they work regardless of the process working directory.
   const here = dirname(fileURLToPath(import.meta.url));
   config({ path: resolve(here, "../../.env") });
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  const region = process.env.AWS_REGION;
-  if (!apiKey && !region) {
-    throw new Error(
-      "Neither ANTHROPIC_API_KEY nor AWS_REGION is set — copy .env.example to .env",
-    );
-  }
-  // ANTHROPIC_API_KEY takes precedence; Bedrock is the fallback for
-  // AWS-credential-only setups.
-  const call = apiKey ? createAnthropicCaller(apiKey) : createBedrockCaller(region!);
+  const call = selectCaller();
   const dataDir = resolve(here, "../../data");
   mkdirSync(dataDir, { recursive: true });
   const store = new CampaignStore(openDb(resolve(dataDir, "campaigns.db")));

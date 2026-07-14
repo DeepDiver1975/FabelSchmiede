@@ -1,5 +1,5 @@
 import { AnthropicBedrock } from "@anthropic-ai/bedrock-sdk";
-import type { ClaudeCaller } from "./gmEngine.js";
+import type { LlmCaller } from "./gmEngine.js";
 
 type TextBlock = { type: string; text?: string };
 
@@ -11,7 +11,7 @@ export function extractText(msg: { content: TextBlock[] }): string {
   return block.text;
 }
 
-export function createBedrockCaller(region: string): ClaudeCaller {
+export function createBedrockCaller(region: string): LlmCaller {
   const client = new AnthropicBedrock({ awsRegion: region });
   return async ({ system, messages }) => {
     const response = await client.messages.create({

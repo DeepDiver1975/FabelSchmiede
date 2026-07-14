@@ -13,6 +13,8 @@ cp .env.example .env    # fill in AWS_REGION + credentials
 npm install
 npm run dev             # backend on :8787, frontend on :5173
 ```
+No AWS account? Set `LLM_PROVIDER=nim` and `NVIDIA_API_KEY` in `.env` instead,
+using a free API key from [build.nvidia.com](https://build.nvidia.com).
 Open the frontend URL (printed by Vite) in a browser. Everyone plays on the one screen.
 
 ## Notes
