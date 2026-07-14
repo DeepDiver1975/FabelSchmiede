@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { buildSystemPrompt, buildOpeningSystemPrompt, historyToMessages } from "./prompt.js";
+import {
+  buildSystemPrompt,
+  buildOpeningSystemPrompt,
+  buildAsideSystemPrompt,
+  historyToMessages,
+} from "./prompt.js";
 
 describe("buildSystemPrompt", () => {
   it("instructs the GM never to roll dice itself and to answer as JSON", () => {
@@ -72,7 +77,49 @@ describe("buildOpeningSystemPrompt party injection", () => {
   });
 });
 
+describe("buildAsideSystemPrompt", () => {
+  it("embeds the premise and instructs no dice roll, no scene advance", () => {
+    const p = buildAsideSystemPrompt("Goblins im Nebelwald").toLowerCase();
+    expect(p).toContain("goblins im nebelwald");
+    expect(p).toContain("nachfrage");
+    expect(p).toContain("dicerequest");
+  });
+
+  it("still carries the continuity rules so aside answers stay canon-consistent", () => {
+    const p = buildAsideSystemPrompt("Goblins im Nebelwald").toLowerCase();
+    expect(p).toContain("konsistent");
+  });
+
+  it("folds the opening narration in, same as the story prompt", () => {
+    const opening = "Ihr betretet das Dorf Einwindtal.";
+    expect(buildAsideSystemPrompt("Goblins im Nebelwald", opening)).toContain("Einwindtal");
+  });
+
+  it("does not carry the story prompt's dice/format rules", () => {
+    // buildSystemPrompt tells the model to set diceRequest for skill checks;
+    // the aside prompt must not — it always forces diceRequest to null.
+    const storyPrompt = buildSystemPrompt("Goblins im Nebelwald");
+    const asidePrompt = buildAsideSystemPrompt("Goblins im Nebelwald");
+    expect(asidePrompt).not.toBe(storyPrompt);
+    expect(asidePrompt.toLowerCase()).toContain("immer auf null");
+  });
+});
+
 describe("historyToMessages", () => {
+  it("reconstructs the envelope for a gm turn regardless of its kind", () => {
+    // Asides must be replayed as context exactly like story turns, so the
+    // model stays consistent with facts it invented in an aside answer.
+    const msgs = historyToMessages([
+      { role: "player", text: "Wie heißt der Wirt?", kind: "aside" },
+      { role: "gm", text: "Er heißt Berthold.", diceRequest: null, kind: "aside" },
+    ]);
+    expect(msgs).toEqual([
+      { role: "user", content: "Wie heißt der Wirt?" },
+      { role: "assistant", content: '{"narration":"Er heißt Berthold.","diceRequest":null}' },
+    ]);
+  });
+
+
   it("wraps interior gm turns as the JSON envelope the model is asked to produce", () => {
     // The model few-shots off its own prior assistant turns. If those are bare
     // prose (not the JSON envelope), it eventually drops the envelope too and

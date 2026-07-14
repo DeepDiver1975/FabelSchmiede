@@ -1,5 +1,11 @@
 import { useState } from "react";
-import { api, type State, type Character, type CharacterInput, type CharacterNarrative } from "./api.js";
+import {
+  api,
+  type State,
+  type Character,
+  type CharacterInput,
+  type CharacterNarrative,
+} from "./api.js";
 
 type CharacterForm = { id?: string; name: string; concept: string; narrative: CharacterNarrative };
 
@@ -203,7 +209,7 @@ function PartyPanel({
   );
 }
 
-type PendingTurn = { kind: "action" | "roll"; text: string; failed: boolean };
+type PendingTurn = { kind: "action" | "roll" | "aside"; text: string; failed: boolean };
 
 function pendingTurnText(t: PendingTurn): string {
   return t.kind === "roll" ? `[Würfelergebnis: ${t.text}]` : t.text;
@@ -224,6 +230,7 @@ export function PlayView({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingTurn, setPendingTurn] = useState<PendingTurn | null>(null);
+  const [asideMode, setAsideMode] = useState(false);
 
   const id = state.campaign.id;
   const pending = state.pendingDice;
@@ -233,12 +240,15 @@ export function PlayView({
   // so "Erneut senden" can resubmit the exact same text without retyping. The
   // backend never persists on a malformed GM reply, so this is the only record
   // of the attempt until it succeeds.
-  async function submitPlay(kind: "action" | "roll", text: string) {
+  async function submitPlay(kind: "action" | "roll" | "aside", text: string) {
     setPendingTurn({ kind, text, failed: false });
     setBusy(true);
     setError(null);
     try {
-      const next = kind === "action" ? await api.action(id, text) : await api.roll(id, text);
+      const next =
+        kind === "roll"
+          ? await api.roll(id, text)
+          : await api.action(id, text, kind === "aside" ? "aside" : "story");
       setState(next);
       setPendingTurn(null);
     } catch (e) {
@@ -297,7 +307,12 @@ export function PlayView({
     if (!input.trim()) return;
     const text = input;
     setInput("");
-    await submitPlay("action", text);
+    if (asideMode) {
+      setAsideMode(false); // one-shot toggle — back to normal action mode after sending
+      await submitPlay("aside", text);
+    } else {
+      await submitPlay("action", text);
+    }
   }
 
   async function submitRoll() {
@@ -339,14 +354,27 @@ export function PlayView({
       />
 
       <section className="transcript">
-        {state.turns.map((t, i) => (
-          <p key={i} className={t.role}>
-            <strong>{t.role === "gm" ? "SL" : "Ihr"}:</strong> {t.text}
-          </p>
-        ))}
+        {state.turns.map((t, i) => {
+          const aside = t.kind === "aside";
+          const label = aside
+            ? t.role === "gm"
+              ? "SL (Antwort)"
+              : "Ihr (Frage)"
+            : t.role === "gm"
+              ? "SL"
+              : "Ihr";
+          return (
+            <p key={i} className={`${t.role}${aside ? " aside" : ""}`}>
+              <strong>{label}:</strong> {t.text}
+            </p>
+          );
+        })}
         {pendingTurn && (
-          <p className={`player pending${pendingTurn.failed ? " failed" : ""}`}>
-            <strong>Ihr:</strong> {pendingTurnText(pendingTurn)}
+          <p
+            className={`player pending${pendingTurn.kind === "aside" ? " aside" : ""}${pendingTurn.failed ? " failed" : ""}`}
+          >
+            <strong>{pendingTurn.kind === "aside" ? "Ihr (Frage)" : "Ihr"}:</strong>{" "}
+            {pendingTurnText(pendingTurn)}
           </p>
         )}
       </section>
@@ -374,15 +402,24 @@ export function PlayView({
         </section>
       ) : (
         <section className="action">
+          <button
+            type="button"
+            className={`aside-toggle${asideMode ? " active" : ""}`}
+            onClick={() => setAsideMode((a) => !a)}
+            disabled={busy}
+            title="Nachfragen, ohne die Geschichte fortzusetzen"
+          >
+            ❓
+          </button>
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && submitAction()}
-            placeholder="Was tut ihr?"
+            placeholder={asideMode ? "Übrigens, frag nach etwas zur Spielwelt…" : "Was tut ihr?"}
             disabled={busy}
             autoFocus
           />
-          <button onClick={submitAction} disabled={busy}>Handeln</button>
+          <button onClick={submitAction} disabled={busy}>{asideMode ? "Fragen" : "Handeln"}</button>
         </section>
       )}
     </main>

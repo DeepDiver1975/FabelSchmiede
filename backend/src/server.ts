@@ -3,6 +3,7 @@ import cors from "@fastify/cors";
 import { Session } from "./session.js";
 import {
   generateGmReply,
+  generateAsideReply,
   generateOpening,
   generateStory,
   type ClaudeCaller,
@@ -10,7 +11,7 @@ import {
 import { createBedrockCaller } from "./bedrockCaller.js";
 import { createAnthropicCaller } from "./anthropicCaller.js";
 import { CampaignStore } from "./campaignStore.js";
-import type { Character, CharacterInput, DiceRequest, StoredTurn } from "./types.js";
+import type { Character, CharacterInput, DiceRequest, StoredTurn, TurnKind } from "./types.js";
 
 const VERHASPELT = "Der Spielleiter hat sich verhaspelt — bitte nochmal.";
 
@@ -34,8 +35,15 @@ export function buildServer(call: ClaudeCaller, store: CampaignStore): FastifyIn
     return { campaign, turns, pendingDice: pendingFrom(turns), characters };
   }
 
-  // Shared handler for action + roll: never persist unless the GM reply parses.
-  async function play(id: string, playerText: string, reply: import("fastify").FastifyReply) {
+  // Shared handler for action + roll + aside: never persist unless the GM
+  // reply parses. Asides never carry a diceRequest — force-nulled below even
+  // though the aside prompt already instructs the model to leave it null.
+  async function play(
+    id: string,
+    playerText: string,
+    kind: TurnKind,
+    reply: import("fastify").FastifyReply,
+  ) {
     const campaign = store.getCampaign(id);
     if (!campaign) return reply.code(404).send({ error: "Kampagne nicht gefunden." });
     if (campaign.status === "finished")
@@ -43,17 +51,25 @@ export function buildServer(call: ClaudeCaller, store: CampaignStore): FastifyIn
 
     const characters = store.listCharacters(id);
     const session = new Session(store.getTurns(id));
-    session.addPlayerTurn(playerText);
+    session.addPlayerTurn(playerText, kind);
     let gm;
     try {
-      gm = await generateGmReply(session.getHistory(), campaign.premise, call, characters);
+      gm =
+        kind === "aside"
+          ? await generateAsideReply(session.getHistory(), campaign.premise, call, characters)
+          : await generateGmReply(session.getHistory(), campaign.premise, call, characters);
     } catch (err) {
       reply.log.error({ err, campaignId: id, playerText }, "GM reply failed (verhaspelt)");
       return reply.code(500).send({ error: VERHASPELT });
     }
     store.appendTurns(id, [
-      { role: "player", text: playerText, diceRequest: null },
-      { role: "gm", text: gm.narration, diceRequest: gm.diceRequest },
+      { role: "player", text: playerText, diceRequest: null, kind },
+      {
+        role: "gm",
+        text: gm.narration,
+        diceRequest: kind === "aside" ? null : gm.diceRequest,
+        kind,
+      },
     ]);
     return stateOf(id);
   }
@@ -157,12 +173,13 @@ export function buildServer(call: ClaudeCaller, store: CampaignStore): FastifyIn
     },
   );
 
-  app.post<{ Params: { id: string }; Body: { text: string } }>(
+  app.post<{ Params: { id: string }; Body: { text: string; kind?: TurnKind } }>(
     "/api/campaigns/:id/action",
     async (req, reply) => {
       const text = req.body?.text?.trim();
       if (!text) return reply.code(400).send({ error: "Es fehlt eine Handlung." });
-      return play(req.params.id, text, reply);
+      const kind: TurnKind = req.body?.kind === "aside" ? "aside" : "story";
+      return play(req.params.id, text, kind, reply);
     },
   );
 
@@ -171,7 +188,7 @@ export function buildServer(call: ClaudeCaller, store: CampaignStore): FastifyIn
     async (req, reply) => {
       const result = req.body?.result?.trim();
       if (!result) return reply.code(400).send({ error: "Es fehlt ein Würfelergebnis." });
-      return play(req.params.id, `[Würfelergebnis: ${result}]`, reply);
+      return play(req.params.id, `[Würfelergebnis: ${result}]`, "story", reply);
     },
   );
 

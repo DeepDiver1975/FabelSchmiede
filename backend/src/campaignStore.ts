@@ -11,9 +11,15 @@ import type {
   ResourcePool,
   StoredTurn,
   Story,
+  TurnKind,
 } from "./types.js";
 
-type TurnInput = { role: "gm" | "player"; text: string; diceRequest: DiceRequest | null };
+type TurnInput = {
+  role: "gm" | "player";
+  text: string;
+  diceRequest: DiceRequest | null;
+  kind?: TurnKind;
+};
 
 export class CampaignStore {
   constructor(private db: Database.Database) {}
@@ -52,7 +58,7 @@ export class CampaignStore {
       .get(campaignId) as { next: number };
     this.db
       .prepare(
-        "INSERT INTO turns (campaign_id, seq, role, text, dice_reason, dice_hint) VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO turns (campaign_id, seq, role, text, dice_reason, dice_hint, kind) VALUES (?, ?, ?, ?, ?, ?, ?)",
       )
       .run(
         campaignId,
@@ -61,6 +67,7 @@ export class CampaignStore {
         turn.text,
         turn.diceRequest?.reason ?? null,
         turn.diceRequest?.hint ?? null,
+        turn.kind ?? "story",
       );
   }
 
@@ -74,13 +81,14 @@ export class CampaignStore {
   getTurns(campaignId: string): StoredTurn[] {
     const rows = this.db
       .prepare(
-        "SELECT role, text, dice_reason, dice_hint FROM turns WHERE campaign_id = ? ORDER BY seq",
+        "SELECT role, text, dice_reason, dice_hint, kind FROM turns WHERE campaign_id = ? ORDER BY seq",
       )
       .all(campaignId) as {
       role: "gm" | "player";
       text: string;
       dice_reason: string | null;
       dice_hint: string | null;
+      kind: TurnKind;
     }[];
     return rows.map((r) => ({
       role: r.role,
@@ -89,6 +97,7 @@ export class CampaignStore {
         r.dice_reason !== null && r.dice_hint !== null
           ? { reason: r.dice_reason, hint: r.dice_hint }
           : null,
+      kind: r.kind,
     }));
   }
 

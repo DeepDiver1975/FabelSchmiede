@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { generateGmReply, generateOpening, generateStory } from "./gmEngine.js";
+import { generateGmReply, generateAsideReply, generateOpening, generateStory } from "./gmEngine.js";
 import type { StoredTurn, Turn } from "./types.js";
 
 const history: Turn[] = [{ role: "player", text: "Ich gehe hinein." }];
@@ -53,6 +53,49 @@ describe("generateGmReply", () => {
     // ...but the opening is NOT re-sent as a message (Bedrock needs a leading user msg).
     expect(arg.messages[0]).toEqual({ role: "user", content: "Ich schleiche mich an." });
     expect(arg.messages.some((m: { content: string }) => m.content.includes("Einwindtal"))).toBe(false);
+  });
+});
+
+describe("generateAsideReply", () => {
+  it("returns a parsed reply on the first successful call", async () => {
+    const call = vi.fn().mockResolvedValue('{"narration":"Er heißt Berthold.","diceRequest":null}');
+    const reply = await generateAsideReply(history, premise, call);
+    expect(reply.narration).toBe("Er heißt Berthold.");
+    expect(reply.diceRequest).toBeNull();
+    expect(call).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries once when the first reply is malformed, then succeeds", async () => {
+    const call = vi
+      .fn()
+      .mockResolvedValueOnce("garbage")
+      .mockResolvedValueOnce('{"narration":"Zweiter Versuch.","diceRequest":null}');
+    const reply = await generateAsideReply(history, premise, call);
+    expect(reply.narration).toBe("Zweiter Versuch.");
+    expect(call).toHaveBeenCalledTimes(2);
+  });
+
+  it("uses the aside system prompt, not the story one", async () => {
+    const call = vi.fn().mockResolvedValue('{"narration":"ok","diceRequest":null}');
+    await generateAsideReply(history, premise, call);
+    const arg = call.mock.calls[0][0];
+    expect(arg.system.toLowerCase()).toContain("nachfrage");
+    expect(arg.messages).toEqual([{ role: "user", content: "Ich gehe hinein." }]);
+  });
+
+  it("replays a prior aside exchange as context for a later story call", async () => {
+    // The model must stay consistent about facts it invents in an aside, so a
+    // subsequent story call needs to see the aside Q&A in its message history.
+    const withAside: Turn[] = [
+      { role: "player", text: "Ich gehe hinein." },
+      { role: "player", text: "Wie heißt der Wirt?", kind: "aside" },
+      { role: "gm", text: "Er heißt Berthold.", diceRequest: null, kind: "aside" },
+      { role: "player", text: "Ich grüße den Wirt." },
+    ];
+    const call = vi.fn().mockResolvedValue('{"narration":"ok","diceRequest":null}');
+    await generateGmReply(withAside, premise, call);
+    const arg = call.mock.calls[0][0];
+    expect(arg.messages.some((m: { content: string }) => m.content.includes("Berthold"))).toBe(true);
   });
 });
 

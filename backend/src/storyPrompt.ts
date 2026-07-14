@@ -29,6 +29,7 @@ REGELN FÜR DICH:
 
 export function renderTranscript(turns: StoredTurn[]): string {
   return turns
+    .filter((t) => t.kind !== "aside")
     .map((t) => (t.role === "gm" ? `SPIELLEITER: ${t.text}` : `SPIELER: ${t.text}`))
     .join("\n\n");
 }
