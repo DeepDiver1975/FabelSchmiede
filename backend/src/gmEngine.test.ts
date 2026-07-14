@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { generateGmReply, generateAsideReply, generateOpening, generateStory } from "./gmEngine.js";
+import { generateGmReply, generateAsideReply, generateOpening, generateStory, generatePlan } from "./gmEngine.js";
 import type { StoredTurn, Turn } from "./types.js";
 
 const history: Turn[] = [{ role: "player", text: "Ich gehe hinein." }];
@@ -169,5 +169,42 @@ describe("party roster threading", () => {
     const call = vi.fn().mockResolvedValue("# x\n\ny");
     await generateStory([], { name: "Die Höhle", premise }, call, [character]);
     expect(call.mock.calls[0][0].system).toContain("Thorin");
+  });
+});
+
+const planJson = JSON.stringify({
+  title: "T",
+  brief: "B",
+  backstory: "BS",
+  npcs: [{ name: "N", role: "R", description: "D", secret: "S" }],
+  locations: [{ name: "L", description: "D", secret: "" }],
+  arc: { outline: "O", hooks: ["H"], branchPoints: ["BP"] },
+});
+
+describe("generatePlan", () => {
+  it("returns a parsed plan from a plan-generation call", async () => {
+    const call = async () => planJson;
+    const plan = await generatePlan("Name", "Prämisse", call);
+    expect(plan.title).toBe("T");
+    expect(plan.npcs[0].secret).toBe("S");
+  });
+
+  it("retries once on a malformed first reply", async () => {
+    let n = 0;
+    const call = async () => (n++ === 0 ? "garbage" : planJson);
+    const plan = await generatePlan("Name", "Prämisse", call);
+    expect(plan.title).toBe("T");
+    expect(n).toBe(2);
+  });
+
+  it("passes the plan schema and the plan system prompt to the caller", async () => {
+    let seen: { system: string; schema?: object } | null = null;
+    const call = async (args: { system: string; schema?: object }) => {
+      seen = args;
+      return planJson;
+    };
+    await generatePlan("Name", "Prämisse", call);
+    expect(seen!.system).toContain("Abenteuer-Architekt");
+    expect(seen!.schema).toBeDefined();
   });
 });
