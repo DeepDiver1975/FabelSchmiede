@@ -4,11 +4,22 @@ import { CampaignStore } from "./campaignStore.js";
 import { openDb } from "./db.js";
 import type { LlmCaller } from "./gmEngine.js";
 
+const fakePlanJson = JSON.stringify({
+  title: "Die Höhle",
+  brief: "Ein Dorf am Nebelwald bittet um Hilfe.",
+  backstory: "GEHEIM_BS: ein Kult im Wald.",
+  npcs: [{ name: "Mara", role: "Wirtin", description: "nervös", secret: "GEHEIM_NPC" }],
+  locations: [{ name: "Gasthaus", description: "warm und laut", secret: "" }],
+  arc: { outline: "GEHEIM_ARC", hooks: ["Aufhänger"], branchPoints: ["Weiche"] },
+});
+
 // Fake caller:
+//  - plan requests (system contains "Abenteuer-Architekt") → plan JSON
 //  - story requests (system contains "Kurzgeschichte") → markdown
 //  - a player message containing "angriff" → one dice request
 //  - everything else (incl. openings) → plain narration
 const fakeCall: LlmCaller = async ({ system, messages }) => {
+  if (system.includes("Abenteuer-Architekt")) return fakePlanJson;
   if (system.includes("Kurzgeschichte")) return "# Die Geschichte\n\nEs war einmal…";
   const last = messages[messages.length - 1];
   if (last?.role === "user" && last.content.toLowerCase().includes("angriff")) {
@@ -40,6 +51,47 @@ describe("server", () => {
     expect(body.turns).toHaveLength(1);
     expect(body.turns[0].role).toBe("gm");
     expect(body.pendingDice).toBeNull();
+    await app.close();
+  });
+
+  it("POST /api/campaigns persists a plan and exposes a spoiler-free brief", async () => {
+    const { app, store } = setup();
+    const body = await createCampaign(app);
+    // brief is public and leaks no secrets
+    expect(body.brief.title).toBe("Die Höhle");
+    expect(body.brief.locations[0].name).toBe("Gasthaus");
+    const serialized = JSON.stringify(body.brief);
+    expect(serialized).not.toContain("GEHEIM");
+    expect(serialized).not.toContain("Mara");
+    // the raw plan is persisted with its secrets
+    const stored = store.getPlan(body.campaign.id);
+    expect(stored?.plan.backstory).toContain("GEHEIM_BS");
+    await app.close();
+  });
+
+  it("feeds the plan (incl. secrets) into GM turns", async () => {
+    const seen: string[] = [];
+    const spy: LlmCaller = async (args) => {
+      seen.push(args.system);
+      return fakeCall(args);
+    };
+    const { app } = setup(spy);
+    const { campaign } = await createCampaign(app);
+    await app.inject({ method: "POST", url: `/api/campaigns/${campaign.id}/action`, payload: { text: "Ich schaue mich um" } });
+    // at least one non-plan system prompt carried the world bible with a secret
+    expect(seen.some((s) => !s.includes("Abenteuer-Architekt") && s.includes("GEHEIM_ARC"))).toBe(true);
+    await app.close();
+  });
+
+  it("creates no campaign when plan generation fails", async () => {
+    const failing: LlmCaller = async ({ system }) => {
+      if (system.includes("Abenteuer-Architekt")) return "totally not json";
+      return '{"narration":"x","diceRequest":null}';
+    };
+    const { app, store } = setup(failing);
+    const res = await app.inject({ method: "POST", url: "/api/campaigns", payload: { name: "X", premise: "Y" } });
+    expect(res.statusCode).toBe(500);
+    expect(store.listCampaigns()).toHaveLength(0);
     await app.close();
   });
 
@@ -341,8 +393,10 @@ describe("server", () => {
     const store = new CampaignStore(openDb(":memory:"));
     // Deliberately returns a non-null diceRequest to prove the server strips it
     // for asides even if the model doesn't obey the prompt instruction.
-    const rogueCaller: LlmCaller = async () =>
-      '{"narration":"Er heißt Berthold.","diceRequest":{"reason":"Sollte nie passieren","hint":"W20"}}';
+    const rogueCaller: LlmCaller = async ({ system }) =>
+      system.includes("Abenteuer-Architekt")
+        ? fakePlanJson
+        : '{"narration":"Er heißt Berthold.","diceRequest":{"reason":"Sollte nie passieren","hint":"W20"}}';
     const app = buildServer(rogueCaller, store);
     const { campaign } = await createCampaign(app);
     const res = await app.inject({
@@ -376,6 +430,7 @@ describe("server", () => {
   it("excludes an aside exchange from the generated story transcript", async () => {
     const store = new CampaignStore(openDb(":memory:"));
     const capture = vi.fn(async ({ system, messages }: { system: string; messages: { content: string }[] }) => {
+      if (system.includes("Abenteuer-Architekt")) return fakePlanJson;
       if (system.includes("Kurzgeschichte")) return "# Die Geschichte\n\nEs war einmal…";
       const last = messages[messages.length - 1];
       if (last?.content.includes("Wirt")) {
@@ -400,7 +455,9 @@ describe("server", () => {
 
   it("threads a party member's name into the GM call", async () => {
     const store = new CampaignStore(openDb(":memory:"));
-    const capture = vi.fn().mockResolvedValue('{"narration":"ok","diceRequest":null}');
+    const capture = vi.fn(async ({ system }: { system: string }) =>
+      system.includes("Abenteuer-Architekt") ? fakePlanJson : '{"narration":"ok","diceRequest":null}',
+    );
     const app = buildServer(capture, store);
     const { campaign } = await createCampaign(app);
     await app.inject({
