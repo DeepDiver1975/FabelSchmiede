@@ -1,18 +1,22 @@
 import { renderParty } from "./partyPrompt.js";
-import type { Character, StoredTurn } from "./types.js";
+import { renderPlan } from "./prompt.js";
+import type { Character, StoredTurn, CampaignPlan } from "./types.js";
 
 export function buildStorySystemPrompt(
   campaign: { name: string; premise: string },
   party?: Character[],
+  plan?: CampaignPlan,
 ): string {
   const roster = party ? renderParty(party) : "";
   const partyBlock = roster ? `\n\n${roster}` : "";
+  const rendered = renderPlan(plan);
+  const planBlock = rendered ? `\n\n${rendered}` : "";
   return `
 Du bist ein Autor. Verwandle das folgende Rollenspiel-Protokoll in eine
 zusammenhängende, gut lesbare deutsche Kurzgeschichte.
 
 KAMPAGNE: ${campaign.name}
-AUSGANGSLAGE: ${campaign.premise}${partyBlock}
+AUSGANGSLAGE: ${campaign.premise}${partyBlock}${planBlock}
 
 REGELN FÜR DICH:
 - Schreibe fließende Prosa in der Vergangenheitsform, keine Protokoll- oder

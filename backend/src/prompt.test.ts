@@ -4,7 +4,9 @@ import {
   buildOpeningSystemPrompt,
   buildAsideSystemPrompt,
   historyToMessages,
+  renderPlan,
 } from "./prompt.js";
+import type { CampaignPlan } from "./types.js";
 
 describe("buildSystemPrompt", () => {
   it("instructs the GM never to roll dice itself and to answer as JSON", () => {
@@ -156,5 +158,34 @@ describe("historyToMessages", () => {
       { role: "player", text: "Ich schleiche hinein." },
     ]);
     expect(result[0].role).toBe("user");
+  });
+});
+
+const samplePlan: CampaignPlan = {
+  title: "Der Nebelwald",
+  brief: "Ein Dorf bittet um Hilfe.",
+  backstory: "GEHEIM_BACKSTORY: ein Kult.",
+  npcs: [{ name: "Mara", role: "Wirtin", description: "nervös", secret: "GEHEIM_NPC: Spitzel" }],
+  locations: [{ name: "Gasthaus", description: "warm", secret: "GEHEIM_LOC: Falltür" }],
+  arc: { outline: "GEHEIM_ARC: Ritual", hooks: ["Aufhänger"], branchPoints: ["Weiche"] },
+};
+
+describe("renderPlan / plan in prompts", () => {
+  it("renderPlan of undefined is empty", () => {
+    expect(renderPlan(undefined)).toBe("");
+  });
+
+  it("the GM system prompt includes the full plan incl. secrets", () => {
+    const sys = buildSystemPrompt("Prämisse", undefined, undefined, samplePlan);
+    expect(sys).toContain("Der Nebelwald");
+    expect(sys).toContain("GEHEIM_BACKSTORY");
+    expect(sys).toContain("GEHEIM_NPC");
+    expect(sys).toContain("GEHEIM_LOC");
+    expect(sys).toContain("GEHEIM_ARC");
+    expect(sys).toContain("Mara");
+  });
+
+  it("the opening prompt includes the plan", () => {
+    expect(buildOpeningSystemPrompt("Prämisse", undefined, samplePlan)).toContain("GEHEIM_ARC");
   });
 });
