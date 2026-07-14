@@ -50,11 +50,18 @@ export type CharacterInput = {
   narrative?: CharacterNarrative;
 };
 
+export type CampaignBrief = {
+  title: string;
+  brief: string;
+  locations: { name: string; description: string }[];
+};
+
 export type State = {
   campaign: Campaign;
   turns: Turn[];
   pendingDice: DiceRequest | null;
   characters: Character[];
+  brief: CampaignBrief | null;
 };
 export type Story = { markdown: string; generated_at: string };
 
