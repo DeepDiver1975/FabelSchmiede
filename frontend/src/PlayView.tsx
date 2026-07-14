@@ -5,11 +5,39 @@ import {
   type Character,
   type CharacterInput,
   type CharacterNarrative,
+  type CampaignBrief,
 } from "./api.js";
 
 type CharacterForm = { id?: string; name: string; concept: string; narrative: CharacterNarrative };
 
 const emptyForm: CharacterForm = { name: "", concept: "", narrative: {} };
+
+function CampaignBriefPanel({ brief }: { brief: State["brief"] }) {
+  const [open, setOpen] = useState(false);
+  if (!brief) return null;
+  return (
+    <section className="brief-panel">
+      <button className="brief-toggle" onClick={() => setOpen((o) => !o)}>
+        {open ? "▾" : "▸"} Kampagne: {brief.title}
+      </button>
+      {open && (
+        <div className="brief-body">
+          <p className="brief-text">{brief.brief}</p>
+          {brief.locations.length > 0 && (
+            <dl className="brief-locations">
+              {brief.locations.map((l) => (
+                <div key={l.name}>
+                  <dt>{l.name}</dt>
+                  <dd>{l.description}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
 
 function cleanNarrative(n: CharacterNarrative): CharacterNarrative {
   const entries = Object.entries(n).filter(([, v]) => v?.trim());
@@ -344,6 +372,8 @@ export function PlayView({
           <button onClick={finish} disabled={busy}>Kampagne abschließen</button>
         </div>
       </header>
+
+      <CampaignBriefPanel brief={state.brief} />
 
       <PartyPanel
         characters={state.characters}

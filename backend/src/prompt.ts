@@ -1,6 +1,6 @@
 import { SCENE_BRIEF } from "./scene.js";
 import { renderParty } from "./partyPrompt.js";
-import type { Character, Turn } from "./types.js";
+import type { Character, CampaignPlan, Turn } from "./types.js";
 
 const CONTINUITY_RULES = `
 KONSISTENZ (SEHR WICHTIG):
@@ -65,14 +65,62 @@ function partySection(party: Character[] | undefined): string {
   return roster ? `\n\n${roster}` : "";
 }
 
-export function buildSystemPrompt(premise: string, opening?: string, party?: Character[]): string {
+// The full plan is GM-only context — secrets included. It is re-injected into
+// every GM turn (like the opening/party) so the world stays consistent. Frozen
+// at creation, so this never mutates.
+export function renderPlan(plan: CampaignPlan | undefined): string {
+  if (!plan) return "";
+  const npcs = plan.npcs
+    .map((n) => `- ${n.name} (${n.role}): ${n.description}${n.secret ? ` [GEHEIM: ${n.secret}]` : ""}`)
+    .join("\n");
+  const locations = plan.locations
+    .map((l) => `- ${l.name}: ${l.description}${l.secret ? ` [GEHEIM: ${l.secret}]` : ""}`)
+    .join("\n");
+  const hooks = plan.arc.hooks.map((h) => `- ${h}`).join("\n");
+  const branches = plan.arc.branchPoints.map((b) => `- ${b}`).join("\n");
+  return `
+WELTENBIBEL (NUR FÜR DICH, den Spielleiter — enthält Geheimnisse, die die
+Gruppe NICHT kennt): Nutze dies als verbindliches Weltwissen. Halte Namen und
+Motive konsistent. Enthülle Geheimnisse nur durch das Spielgeschehen. Der lose
+Handlungsbogen dient als Orientierung, niemals als Schiene — reagiere auf das,
+was die Gruppe tatsächlich tut.
+
+TITEL: ${plan.title}
+AUSGANGSLAGE (öffentlich): ${plan.brief}
+HINTERGRUND (geheim): ${plan.backstory}
+
+WICHTIGE FIGUREN:
+${npcs}
+
+ORTE:
+${locations}
+
+HANDLUNGSBOGEN (geheim): ${plan.arc.outline}
+AUFHÄNGER:
+${hooks}
+ENTSCHEIDUNGSWEICHEN:
+${branches}
+`.trim();
+}
+
+function planSection(plan: CampaignPlan | undefined): string {
+  const rendered = renderPlan(plan);
+  return rendered ? `\n\n${rendered}` : "";
+}
+
+export function buildSystemPrompt(
+  premise: string,
+  opening?: string,
+  party?: Character[],
+  plan?: CampaignPlan,
+): string {
   return `
 Du bist der Spielleiter (Game Master).
 
 ${SCENE_BRIEF}
 
 SZENE DIESER KAMPAGNE:
-${premise}${openingSection(opening)}${partySection(party)}
+${premise}${openingSection(opening)}${partySection(party)}${planSection(plan)}
 
 ${CONTINUITY_RULES}
 
@@ -80,7 +128,12 @@ ${DICE_AND_FORMAT_RULES}
 `.trim();
 }
 
-export function buildAsideSystemPrompt(premise: string, opening?: string, party?: Character[]): string {
+export function buildAsideSystemPrompt(
+  premise: string,
+  opening?: string,
+  party?: Character[],
+  plan?: CampaignPlan,
+): string {
   return `
 Du bist der Spielleiter (Game Master) und beantwortest gerade eine Nebenfrage
 außerhalb der eigentlichen Spielhandlung.
@@ -88,7 +141,7 @@ außerhalb der eigentlichen Spielhandlung.
 ${SCENE_BRIEF}
 
 SZENE DIESER KAMPAGNE:
-${premise}${openingSection(opening)}${partySection(party)}
+${premise}${openingSection(opening)}${partySection(party)}${planSection(plan)}
 
 ${CONTINUITY_RULES}
 
@@ -96,14 +149,18 @@ ${ASIDE_RULES}
 `.trim();
 }
 
-export function buildOpeningSystemPrompt(premise: string, party?: Character[]): string {
+export function buildOpeningSystemPrompt(
+  premise: string,
+  party?: Character[],
+  plan?: CampaignPlan,
+): string {
   return `
 Du bist der Spielleiter (Game Master) und eröffnest eine neue Kampagne.
 
 ${SCENE_BRIEF}
 
 SZENE DIESER KAMPAGNE:
-${premise}${partySection(party)}
+${premise}${partySection(party)}${planSection(plan)}
 
 Erzähle eine kurze, atmosphärische Eröffnungsszene auf Deutsch, die die Gruppe
 in diese Ausgangslage hineinversetzt, und ende mit einer offenen Frage wie

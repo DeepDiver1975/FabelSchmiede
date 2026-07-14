@@ -12,7 +12,7 @@ function isDiceRequest(v: unknown): v is DiceRequest {
 // (which strands the player on "der Spielleiter hat sich verhaspelt"), extract
 // the first {...} object from the text and parse that. Genuinely unparseable
 // output still throws, preserving the retry-once contract.
-function extractJsonObject(raw: string): unknown {
+export function extractJsonObject(raw: string): unknown {
   const trimmed = raw.trim();
   // Fast path: already clean JSON.
   try {

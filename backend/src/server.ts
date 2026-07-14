@@ -6,8 +6,10 @@ import {
   generateAsideReply,
   generateOpening,
   generateStory,
+  generatePlan,
   type LlmCaller,
 } from "./gmEngine.js";
+import { toBrief } from "./campaignPlan.js";
 import { createBedrockCaller } from "./bedrockCaller.js";
 import { createAnthropicCaller } from "./anthropicCaller.js";
 import { createNimCaller } from "./nimCaller.js";
@@ -33,7 +35,9 @@ export function buildServer(call: LlmCaller, store: CampaignStore): FastifyInsta
     if (!campaign) return null;
     const turns = store.getTurns(id);
     const characters = store.listCharacters(id);
-    return { campaign, turns, pendingDice: pendingFrom(turns), characters };
+    const stored = store.getPlan(id);
+    const brief = stored ? toBrief(stored.plan) : null;
+    return { campaign, turns, pendingDice: pendingFrom(turns), characters, brief };
   }
 
   // Shared handler for action + roll + aside: never persist unless the GM
@@ -51,14 +55,15 @@ export function buildServer(call: LlmCaller, store: CampaignStore): FastifyInsta
       return reply.code(409).send({ error: "Diese Kampagne ist abgeschlossen." });
 
     const characters = store.listCharacters(id);
+    const plan = store.getPlan(id)?.plan;
     const session = new Session(store.getTurns(id));
     session.addPlayerTurn(playerText, kind);
     let gm;
     try {
       gm =
         kind === "aside"
-          ? await generateAsideReply(session.getHistory(), campaign.premise, call, characters)
-          : await generateGmReply(session.getHistory(), campaign.premise, call, characters);
+          ? await generateAsideReply(session.getHistory(), campaign.premise, call, characters, plan)
+          : await generateGmReply(session.getHistory(), campaign.premise, call, characters, plan);
     } catch (err) {
       reply.log.error({ err, campaignId: id, playerText }, "GM reply failed (verhaspelt)");
       return reply.code(500).send({ error: VERHASPELT });
@@ -85,14 +90,16 @@ export function buildServer(call: LlmCaller, store: CampaignStore): FastifyInsta
       if (!name || !premise) {
         return reply.code(400).send({ error: "Name und Prämisse sind erforderlich." });
       }
-      let opening;
+      let plan, opening;
       try {
-        opening = await generateOpening(premise, call);
+        plan = await generatePlan(name, premise, call);
+        opening = await generateOpening(premise, call, [], plan);
       } catch (err) {
-        reply.log.error({ err, premise }, "opening generation failed (verhaspelt)");
+        reply.log.error({ err, premise }, "campaign generation failed (verhaspelt)");
         return reply.code(500).send({ error: VERHASPELT });
       }
       const campaign = store.createCampaign(name, premise);
+      store.savePlan(campaign.id, plan);
       store.appendTurn(campaign.id, {
         role: "gm",
         text: opening.narration,
@@ -210,7 +217,8 @@ export function buildServer(call: LlmCaller, store: CampaignStore): FastifyInsta
     let markdown;
     try {
       const characters = store.listCharacters(campaign.id);
-      markdown = await generateStory(store.getTurns(campaign.id), campaign, call, characters);
+      const plan = store.getPlan(campaign.id)?.plan;
+      markdown = await generateStory(store.getTurns(campaign.id), campaign, call, characters, plan);
     } catch (err) {
       reply.log.error({ err, campaignId: campaign.id }, "story generation failed (verhaspelt)");
       return reply.code(500).send({ error: VERHASPELT });

@@ -60,3 +60,9 @@ button:disabled { opacity: 0.5; cursor: default; }
 .party-form { display: flex; flex-direction: column; gap: 0.5rem; }
 .party-form textarea { font: inherit; padding: 0.5rem; background: #12100c; color: #e8e0d0; border: 1px solid #4a3f30; border-radius: 4px; }
 .party-form-actions { display: flex; gap: 0.5rem; }
+
+.brief-panel { margin: 0.5rem 0; }
+.brief-toggle { background: none; border: none; cursor: pointer; font: inherit; padding: 0.25rem 0; }
+.brief-body { padding: 0.25rem 0.75rem; border-left: 2px solid #ccc; }
+.brief-locations dt { font-weight: bold; }
+.brief-locations dd { margin: 0 0 0.4rem 0; }
