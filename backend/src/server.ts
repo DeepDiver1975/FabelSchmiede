@@ -13,6 +13,8 @@ import { toBrief } from "./campaignPlan.js";
 import { createBedrockCaller } from "./bedrockCaller.js";
 import { createAnthropicCaller } from "./anthropicCaller.js";
 import { createNimCaller } from "./nimCaller.js";
+import { createNimTtsSynthesizer } from "./nimTtsSynthesizer.js";
+import type { TtsSynthesizer } from "./tts.js";
 import { CampaignStore } from "./campaignStore.js";
 import type { Character, CharacterInput, DiceRequest, StoredTurn, TurnKind } from "./types.js";
 
@@ -23,7 +25,11 @@ function pendingFrom(turns: StoredTurn[]): DiceRequest | null {
   return last && last.role === "gm" ? last.diceRequest : null;
 }
 
-export function buildServer(call: LlmCaller, store: CampaignStore): FastifyInstance {
+export function buildServer(
+  call: LlmCaller,
+  store: CampaignStore,
+  synth: TtsSynthesizer | null = null,
+): FastifyInstance {
   // Enable Pino request logging outside tests; under vitest (NODE_ENV=test) the
   // request logs are just noise. Even when the logger is off, Fastify supplies a
   // no-op `app.log`, so the explicit error logging below still works.
@@ -37,7 +43,7 @@ export function buildServer(call: LlmCaller, store: CampaignStore): FastifyInsta
     const characters = store.listCharacters(id);
     const stored = store.getPlan(id);
     const brief = stored ? toBrief(stored.plan) : null;
-    return { campaign, turns, pendingDice: pendingFrom(turns), characters, brief };
+    return { campaign, turns, pendingDice: pendingFrom(turns), characters, brief, ttsEnabled: synth !== null };
   }
 
   // Shared handler for action + roll + aside: never persist unless the GM
@@ -234,6 +240,37 @@ export function buildServer(call: LlmCaller, store: CampaignStore): FastifyInsta
     return story;
   });
 
+  // Lazy, cached per-turn TTS. Synthesizing here — never during a play turn —
+  // keeps TTS latency and failures out of the game loop: the worst case is "no
+  // audio", the transcript is untouched. Only gm narration is voiced.
+  app.get<{ Params: { id: string; seq: string } }>(
+    "/api/campaigns/:id/turns/:seq/audio",
+    async (req, reply) => {
+      const campaign = store.getCampaign(req.params.id);
+      if (!campaign) return reply.code(404).send({ error: "Kampagne nicht gefunden." });
+      const seq = Number(req.params.seq);
+      const turn = Number.isInteger(seq)
+        ? store.getTurns(req.params.id).find((t) => t.seq === seq)
+        : undefined;
+      if (!turn || turn.role !== "gm")
+        return reply.code(404).send({ error: "Keine Erzählung für diese Runde." });
+
+      const cached = store.getTurnAudio(req.params.id, seq);
+      if (cached) return reply.type(cached.contentType).send(cached.audio);
+      if (!synth) return reply.code(404).send({ error: "Sprachausgabe ist nicht aktiviert." });
+
+      let result;
+      try {
+        result = await synth(turn.text);
+      } catch (err) {
+        reply.log.error({ err, campaignId: req.params.id, seq }, "TTS synthesis failed");
+        return reply.code(502).send({ error: VERHASPELT });
+      }
+      store.saveTurnAudio(req.params.id, seq, result.audio, result.contentType, result.charCount);
+      return reply.type(result.contentType).send(result.audio);
+    },
+  );
+
   return app;
 }
 
@@ -265,6 +302,21 @@ function selectCaller(): LlmCaller {
   );
 }
 
+// TTS is opt-in and independent of the LLM provider: setting NVIDIA_API_KEY for
+// the NIM *LLM* must not silently switch the voice on. Returns null (feature
+// off) unless TTS_PROVIDER=nim is set explicitly.
+function selectSynthesizer(): TtsSynthesizer | null {
+  if (process.env.TTS_PROVIDER !== "nim") return null;
+  const apiKey = process.env.NVIDIA_API_KEY;
+  if (!apiKey) throw new Error("TTS_PROVIDER=nim requires NVIDIA_API_KEY to be set");
+  return createNimTtsSynthesizer(apiKey, {
+    voice: process.env.NIM_TTS_VOICE ?? "Magpie-Multilingual.DE-DE.Pascal",
+    languageCode: process.env.NIM_TTS_LANGUAGE ?? "de-DE",
+    functionId: process.env.NIM_TTS_FUNCTION_ID ?? "877104f7-e885-42b9-8de8-f6e4c6303969",
+    sampleRate: Number(process.env.NIM_TTS_SAMPLE_RATE ?? 44100),
+  });
+}
+
 async function main() {
   const { config } = await import("dotenv");
   const { fileURLToPath } = await import("node:url");
@@ -276,11 +328,12 @@ async function main() {
   const here = dirname(fileURLToPath(import.meta.url));
   config({ path: resolve(here, "../../.env") });
   const call = selectCaller();
+  const synth = selectSynthesizer();
   const dataDir = resolve(here, "../../data");
   mkdirSync(dataDir, { recursive: true });
   const store = new CampaignStore(openDb(resolve(dataDir, "campaigns.db")));
   const port = Number(process.env.BACKEND_PORT ?? 8787);
-  const app = buildServer(call, store);
+  const app = buildServer(call, store, synth);
   await app.listen({ port, host: "127.0.0.1" });
   console.log(`GM backend listening on http://127.0.0.1:${port}`);
 }

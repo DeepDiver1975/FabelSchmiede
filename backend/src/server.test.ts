@@ -3,6 +3,7 @@ import { buildServer } from "./server.js";
 import { CampaignStore } from "./campaignStore.js";
 import { openDb } from "./db.js";
 import type { LlmCaller } from "./gmEngine.js";
+import type { TtsSynthesizer } from "./tts.js";
 
 const fakePlanJson = JSON.stringify({
   title: "Die Höhle",
@@ -28,9 +29,9 @@ const fakeCall: LlmCaller = async ({ system, messages }) => {
   return '{"narration":"Es geschieht etwas.","diceRequest":null}';
 };
 
-function setup(call: LlmCaller = fakeCall) {
+function setup(call: LlmCaller = fakeCall, synth: TtsSynthesizer | null = null) {
   const store = new CampaignStore(openDb(":memory:"));
-  return { store, app: buildServer(call, store) };
+  return { store, app: buildServer(call, store, synth) };
 }
 
 async function createCampaign(app: ReturnType<typeof setup>["app"]) {
@@ -472,6 +473,77 @@ describe("server", () => {
     });
     const lastCall = capture.mock.calls[capture.mock.calls.length - 1][0];
     expect(lastCall.system).toContain("Thorin");
+    await app.close();
+  });
+});
+
+describe("turn audio endpoint", () => {
+  const wav = Buffer.from([0x52, 0x49, 0x46, 0x46, 1, 2, 3, 4]);
+  const fakeSynth: TtsSynthesizer = async (text) => ({
+    audio: wav,
+    contentType: "audio/wav",
+    charCount: text.length,
+  });
+
+  it("reports ttsEnabled=false and 404s the audio when TTS is disabled", async () => {
+    const { app } = setup(); // no synth
+    const body = await createCampaign(app);
+    expect(body.ttsEnabled).toBe(false);
+    const res = await app.inject({ method: "GET", url: `/api/campaigns/${body.campaign.id}/turns/0/audio` });
+    expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it("synthesizes on first request, caches, and serves the same bytes thereafter", async () => {
+    const synth = vi.fn(fakeSynth);
+    const { app, store } = setup(fakeCall, synth);
+    const body = await createCampaign(app);
+    expect(body.ttsEnabled).toBe(true);
+
+    const first = await app.inject({ method: "GET", url: `/api/campaigns/${body.campaign.id}/turns/0/audio` });
+    expect(first.statusCode).toBe(200);
+    expect(first.headers["content-type"]).toContain("audio/wav");
+    expect(Buffer.compare(first.rawPayload, wav)).toBe(0);
+    expect(synth).toHaveBeenCalledTimes(1);
+    expect(store.getTurnAudio(body.campaign.id, 0)).not.toBeNull();
+
+    const second = await app.inject({ method: "GET", url: `/api/campaigns/${body.campaign.id}/turns/0/audio` });
+    expect(second.statusCode).toBe(200);
+    expect(Buffer.compare(second.rawPayload, wav)).toBe(0);
+    // Served from cache — the synthesizer is not called again.
+    expect(synth).toHaveBeenCalledTimes(1);
+    await app.close();
+  });
+
+  it("404s a non-gm (player) turn", async () => {
+    const { app } = setup(fakeCall, fakeSynth);
+    const { campaign } = await createCampaign(app);
+    // seq 0 = gm opening, seq 1 = player, seq 2 = gm
+    await app.inject({ method: "POST", url: `/api/campaigns/${campaign.id}/action`, payload: { text: "Ich schaue mich um." } });
+    const res = await app.inject({ method: "GET", url: `/api/campaigns/${campaign.id}/turns/1/audio` });
+    expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it("404s an unknown campaign or seq", async () => {
+    const { app } = setup(fakeCall, fakeSynth);
+    const { campaign } = await createCampaign(app);
+    const unknownCampaign = await app.inject({ method: "GET", url: `/api/campaigns/nope/turns/0/audio` });
+    expect(unknownCampaign.statusCode).toBe(404);
+    const unknownSeq = await app.inject({ method: "GET", url: `/api/campaigns/${campaign.id}/turns/999/audio` });
+    expect(unknownSeq.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it("502s when synthesis fails, without caching anything", async () => {
+    const failing: TtsSynthesizer = async () => {
+      throw new Error("nim down");
+    };
+    const { app, store } = setup(fakeCall, failing);
+    const { campaign } = await createCampaign(app);
+    const res = await app.inject({ method: "GET", url: `/api/campaigns/${campaign.id}/turns/0/audio` });
+    expect(res.statusCode).toBe(502);
+    expect(store.getTurnAudio(campaign.id, 0)).toBeNull();
     await app.close();
   });
 });

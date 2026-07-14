@@ -83,9 +83,10 @@ export class CampaignStore {
   getTurns(campaignId: string): StoredTurn[] {
     const rows = this.db
       .prepare(
-        "SELECT role, text, dice_reason, dice_hint, kind FROM turns WHERE campaign_id = ? ORDER BY seq",
+        "SELECT seq, role, text, dice_reason, dice_hint, kind FROM turns WHERE campaign_id = ? ORDER BY seq",
       )
       .all(campaignId) as {
+      seq: number;
       role: "gm" | "player";
       text: string;
       dice_reason: string | null;
@@ -100,6 +101,7 @@ export class CampaignStore {
           ? { reason: r.dice_reason, hint: r.dice_hint }
           : null,
       kind: r.kind,
+      seq: r.seq,
     }));
   }
 
@@ -125,6 +127,37 @@ export class CampaignStore {
       .prepare("SELECT markdown, generated_at FROM stories WHERE campaign_id = ?")
       .get(campaignId);
     return (row as Story) ?? null;
+  }
+
+  // Cache the synthesized audio for a single (gm) turn. Idempotent per
+  // (campaign, seq): re-synthesizing overwrites. char_count is stored purely
+  // as a hook for future cost tracking (#4).
+  saveTurnAudio(
+    campaignId: string,
+    seq: number,
+    audio: Buffer,
+    contentType: string,
+    charCount: number,
+  ): void {
+    this.db
+      .prepare(
+        `INSERT INTO turn_audio (campaign_id, seq, audio, content_type, char_count, generated_at)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(campaign_id, seq) DO UPDATE SET
+           audio = excluded.audio,
+           content_type = excluded.content_type,
+           char_count = excluded.char_count,
+           generated_at = excluded.generated_at`,
+      )
+      .run(campaignId, seq, audio, contentType, charCount, new Date().toISOString());
+  }
+
+  getTurnAudio(campaignId: string, seq: number): { audio: Buffer; contentType: string } | null {
+    const row = this.db
+      .prepare("SELECT audio, content_type FROM turn_audio WHERE campaign_id = ? AND seq = ?")
+      .get(campaignId, seq) as { audio: Buffer; content_type: string } | undefined;
+    if (!row) return null;
+    return { audio: row.audio, contentType: row.content_type };
   }
 
   savePlan(campaignId: string, plan: CampaignPlan): StoredPlan {

@@ -66,3 +66,17 @@ button:disabled { opacity: 0.5; cursor: default; }
 .brief-body { padding: 0.25rem 0.75rem; border-left: 2px solid #ccc; }
 .brief-locations dt { font-weight: bold; }
 .brief-locations dd { margin: 0 0 0.4rem 0; }
+
+/* TTS voice controls */
+.tts-toggle { background: none; border: none; cursor: pointer; font-size: 1.1rem; line-height: 1; }
+.tts-toggle.speaking { animation: tts-pulse 1s ease-in-out infinite; }
+@keyframes tts-pulse { 50% { opacity: 0.4; } }
+.turn-audio {
+  margin-left: 0.4rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.75rem;
+  opacity: 0.5;
+}
+.turn-audio:hover { opacity: 1; }

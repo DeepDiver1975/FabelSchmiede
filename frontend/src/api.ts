@@ -5,6 +5,8 @@ export type Turn = {
   text: string;
   diceRequest: DiceRequest | null;
   kind: TurnKind;
+  // Per-campaign turn index, used to address a turn's synthesized audio.
+  seq: number;
 };
 export type CampaignStatus = "active" | "finished";
 
@@ -62,6 +64,8 @@ export type State = {
   pendingDice: DiceRequest | null;
   characters: Character[];
   brief: CampaignBrief | null;
+  // Whether the server has a TTS voice configured (controls audio UI).
+  ttsEnabled: boolean;
 };
 export type Story = { markdown: string; generated_at: string };
 
@@ -97,4 +101,7 @@ export const api = {
     req<Character>(`/api/campaigns/${id}/characters/${cid}`, "PATCH", patch),
   deleteCharacter: (id: string, cid: string) =>
     req<void>(`/api/campaigns/${id}/characters/${cid}`, "DELETE"),
+  // Relative URL (Vite proxies /api) for a gm turn's audio; usable directly as
+  // an <audio> src. The backend synthesizes on first hit and caches.
+  turnAudioUrl: (id: string, seq: number) => `/api/campaigns/${id}/turns/${seq}/audio`,
 };

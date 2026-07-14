@@ -9,7 +9,9 @@ describe("db", () => {
         name: string;
       }[]
     ).map((r) => r.name);
-    expect(names).toEqual(expect.arrayContaining(["campaigns", "turns", "stories"]));
+    expect(names).toEqual(
+      expect.arrayContaining(["campaigns", "turns", "stories", "turn_audio"]),
+    );
     db.close();
   });
 
