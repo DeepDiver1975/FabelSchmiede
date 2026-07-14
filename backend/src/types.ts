@@ -140,3 +140,97 @@ export const GM_REPLY_SCHEMA = {
     },
   },
 } as const;
+
+// --- Campaign plans (AI-generated campaign skeleton) -----------------------
+//
+// A CampaignPlan is the generated "world bible": public player-facing fields
+// live alongside GM-only `secret` fields. The public/secret split is
+// structural so the client projection (toBrief) is "keep the public parts" —
+// no runtime filtering that could leak. The whole plan is frozen at creation.
+
+export type PlanNpc = {
+  name: string;
+  role: string;        // public, e.g. "Wirtin des Gasthauses"
+  description: string; // public: appearance/demeanor a player would perceive
+  secret: string;      // GM-only: hidden motivation/truth ("" if none)
+};
+
+export type PlanLocation = {
+  name: string;
+  description: string; // public, player-safe
+  secret: string;      // GM-only note ("" if none)
+};
+
+export type PlanArc = {
+  outline: string;        // SECRET: beginning → possible ends, loose
+  hooks: string[];        // SECRET: adventure hooks
+  branchPoints: string[]; // SECRET: 2–3 decision forks
+};
+
+export type CampaignPlan = {
+  title: string;              // public
+  brief: string;              // public: spoiler-free setup players read
+  backstory: string;          // SECRET: the real situation behind the brief
+  npcs: PlanNpc[];
+  locations: PlanLocation[];
+  arc: PlanArc;
+};
+
+export type StoredPlan = { plan: CampaignPlan; generated_at: string };
+
+// Public projection sent to clients — never contains secrets.
+export type CampaignBrief = {
+  title: string;
+  brief: string;
+  locations: { name: string; description: string }[];
+};
+
+// JSON Schema for structured output. Same rules as GM_REPLY_SCHEMA: no string
+// length constraints, additionalProperties:false, every field required.
+export const CAMPAIGN_PLAN_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["title", "brief", "backstory", "npcs", "locations", "arc"],
+  properties: {
+    title: { type: "string" },
+    brief: { type: "string" },
+    backstory: { type: "string" },
+    npcs: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["name", "role", "description", "secret"],
+        properties: {
+          name: { type: "string" },
+          role: { type: "string" },
+          description: { type: "string" },
+          secret: { type: "string" },
+        },
+      },
+    },
+    locations: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["name", "description", "secret"],
+        properties: {
+          name: { type: "string" },
+          description: { type: "string" },
+          secret: { type: "string" },
+        },
+      },
+    },
+    arc: {
+      type: "object",
+      additionalProperties: false,
+      required: ["outline", "hooks", "branchPoints"],
+      properties: {
+        outline: { type: "string" },
+        hooks: { type: "array", items: { type: "string" } },
+        branchPoints: { type: "array", items: { type: "string" } },
+      },
+    },
+  },
+} as const;
