@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type CampaignSummary, type State } from "./api.js";
+import { APP_NAME } from "./brand.js";
 
 export function PickerView({
   onOpen,
@@ -47,8 +48,9 @@ export function PickerView({
   return (
     <main className="app">
       <header>
-        <h1>KI-Spielleiter — Kampagnen</h1>
+        <h1><span className="app-brand">{APP_NAME}</span> — Kampagnen</h1>
       </header>
+      <hr className="rule" />
 
       <section className="new-campaign">
         <h2>Neue Kampagne</h2>

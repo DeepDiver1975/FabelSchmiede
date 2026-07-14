@@ -1,5 +1,5 @@
 {
-  "name": "rpg-ai-dm",
+  "name": "fabelschmiede",
   "private": true,
   "type": "module",
   "workspaces": ["backend", "frontend"],
