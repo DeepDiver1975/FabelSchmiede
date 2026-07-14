@@ -34,4 +34,27 @@ describe("db", () => {
     expect(idx.map((r) => r.name)).toContain("idx_turns_campaign_seq");
     db.close();
   });
+
+  it("gives turns a kind column defaulting to 'story'", () => {
+    const db = openDb(":memory:");
+    const col = db
+      .prepare("SELECT \"notnull\", dflt_value FROM pragma_table_info('turns') WHERE name = 'kind'")
+      .get() as { notnull: number; dflt_value: string } | undefined;
+    expect(col).toBeDefined();
+    expect(col!.notnull).toBe(1);
+    expect(col!.dflt_value).toBe("'story'");
+    db.close();
+  });
+
+  it("running migrate() again on a DB that already has the kind column does not duplicate it", () => {
+    const db = openDb(":memory:");
+    expect(() => migrate(db)).not.toThrow();
+    const count = (
+      db
+        .prepare("SELECT COUNT(*) AS n FROM pragma_table_info('turns') WHERE name = 'kind'")
+        .get() as { n: number }
+    ).n;
+    expect(count).toBe(1);
+    db.close();
+  });
 });

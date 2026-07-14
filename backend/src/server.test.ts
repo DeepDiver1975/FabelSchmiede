@@ -337,6 +337,67 @@ describe("server", () => {
     await app.close();
   });
 
+  it("POST /action with kind 'aside' tags both turns as 'aside' and force-nulls diceRequest", async () => {
+    const store = new CampaignStore(openDb(":memory:"));
+    // Deliberately returns a non-null diceRequest to prove the server strips it
+    // for asides even if the model doesn't obey the prompt instruction.
+    const rogueCaller: ClaudeCaller = async () =>
+      '{"narration":"Er heißt Berthold.","diceRequest":{"reason":"Sollte nie passieren","hint":"W20"}}';
+    const app = buildServer(rogueCaller, store);
+    const { campaign } = await createCampaign(app);
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/campaigns/${campaign.id}/action`,
+      payload: { text: "Wie heißt der Wirt?", kind: "aside" },
+    });
+    const body = res.json();
+    const [playerTurn, gmTurn] = body.turns.slice(-2);
+    expect(playerTurn.kind).toBe("aside");
+    expect(gmTurn.kind).toBe("aside");
+    expect(gmTurn.diceRequest).toBeNull();
+    expect(body.pendingDice).toBeNull();
+    await app.close();
+  });
+
+  it("POST /action without a kind still defaults to 'story' (backward compat)", async () => {
+    const { app } = setup();
+    const { campaign } = await createCampaign(app);
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/campaigns/${campaign.id}/action`,
+      payload: { text: "Ich schaue mich um." },
+    });
+    const [playerTurn, gmTurn] = res.json().turns.slice(-2);
+    expect(playerTurn.kind).toBe("story");
+    expect(gmTurn.kind).toBe("story");
+    await app.close();
+  });
+
+  it("excludes an aside exchange from the generated story transcript", async () => {
+    const store = new CampaignStore(openDb(":memory:"));
+    const capture = vi.fn(async ({ system, messages }: { system: string; messages: { content: string }[] }) => {
+      if (system.includes("Kurzgeschichte")) return "# Die Geschichte\n\nEs war einmal…";
+      const last = messages[messages.length - 1];
+      if (last?.content.includes("Wirt")) {
+        return '{"narration":"Er heißt Berthold.","diceRequest":null}';
+      }
+      return '{"narration":"Ihr steht am Eingang.","diceRequest":null}';
+    });
+    const app = buildServer(capture, store);
+    const { campaign } = await createCampaign(app);
+    await app.inject({
+      method: "POST",
+      url: `/api/campaigns/${campaign.id}/action`,
+      payload: { text: "Wie heißt der Wirt?", kind: "aside" },
+    });
+    await app.inject({ method: "POST", url: `/api/campaigns/${campaign.id}/finish` });
+    await app.inject({ method: "POST", url: `/api/campaigns/${campaign.id}/story` });
+
+    const storyCall = capture.mock.calls.find((c) => c[0].system.includes("Kurzgeschichte"));
+    expect(storyCall![0].messages[0].content).not.toContain("Berthold");
+    await app.close();
+  });
+
   it("threads a party member's name into the GM call", async () => {
     const store = new CampaignStore(openDb(":memory:"));
     const capture = vi.fn().mockResolvedValue('{"narration":"ok","diceRequest":null}');

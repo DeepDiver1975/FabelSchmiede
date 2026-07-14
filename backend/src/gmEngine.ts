@@ -1,4 +1,9 @@
-import { buildSystemPrompt, buildOpeningSystemPrompt, historyToMessages } from "./prompt.js";
+import {
+  buildSystemPrompt,
+  buildOpeningSystemPrompt,
+  buildAsideSystemPrompt,
+  historyToMessages,
+} from "./prompt.js";
 import { buildStorySystemPrompt, renderTranscript } from "./storyPrompt.js";
 import { parseGmReply } from "./parseReply.js";
 import { GM_REPLY_SCHEMA } from "./types.js";
@@ -35,6 +40,23 @@ export async function generateGmReply(
   const opening = history[0]?.role === "gm" ? history[0].text : undefined;
   return callWithRetry(
     buildSystemPrompt(premise, opening, characters),
+    historyToMessages(history),
+    call,
+  );
+}
+
+// The opening narration is dropped from the message list by historyToMessages,
+// same as generateGmReply — fold it into the system prompt so its facts are
+// available when answering an aside too.
+export async function generateAsideReply(
+  history: Turn[],
+  premise: string,
+  call: ClaudeCaller,
+  characters: Character[] = [],
+): Promise<GmReply> {
+  const opening = history[0]?.role === "gm" ? history[0].text : undefined;
+  return callWithRetry(
+    buildAsideSystemPrompt(premise, opening, characters),
     historyToMessages(history),
     call,
   );

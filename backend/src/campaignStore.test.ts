@@ -44,18 +44,35 @@ describe("CampaignStore", () => {
     });
     const turns = store.getTurns(c.id);
     expect(turns).toEqual([
-      { role: "gm", text: "Ihr steht am Eingang.", diceRequest: null },
-      { role: "player", text: "Ich gehe hinein.", diceRequest: null },
-      { role: "gm", text: "Ein Goblin!", diceRequest: { reason: "Angriff", hint: "W20 + STR" } },
+      { role: "gm", text: "Ihr steht am Eingang.", diceRequest: null, kind: "story" },
+      { role: "player", text: "Ich gehe hinein.", diceRequest: null, kind: "story" },
+      {
+        role: "gm",
+        text: "Ein Goblin!",
+        diceRequest: { reason: "Angriff", hint: "W20 + STR" },
+        kind: "story",
+      },
     ]);
+  });
+
+  it("defaults kind to 'story' when omitted, and round-trips an explicit 'aside' kind", () => {
+    const store = freshStore();
+    const c = store.createCampaign("C", "p");
+    store.appendTurn(c.id, { role: "player", text: "Wie heißt der Wirt?", diceRequest: null, kind: "aside" });
+    store.appendTurn(c.id, { role: "gm", text: "Er heißt Berthold.", diceRequest: null, kind: "aside" });
+    store.appendTurn(c.id, { role: "player", text: "Ich gehe hinein.", diceRequest: null });
+    const turns = store.getTurns(c.id);
+    expect(turns[0].kind).toBe("aside");
+    expect(turns[1].kind).toBe("aside");
+    expect(turns[2].kind).toBe("story");
   });
 
   it("scopes turns to their campaign", () => {
     const store = freshStore();
     const a = store.createCampaign("A", "p");
     const b = store.createCampaign("B", "p");
-    store.appendTurn(a.id, { role: "gm", text: "A1", diceRequest: null });
-    store.appendTurn(b.id, { role: "gm", text: "B1", diceRequest: null });
+    store.appendTurn(a.id, { role: "gm", text: "A1", diceRequest: null, kind: "story" });
+    store.appendTurn(b.id, { role: "gm", text: "B1", diceRequest: null, kind: "story" });
     expect(store.getTurns(a.id)).toHaveLength(1);
     expect(store.getTurns(a.id)[0].text).toBe("A1");
   });
@@ -78,8 +95,13 @@ describe("CampaignStore", () => {
     ]);
     const turns = store.getTurns(c.id);
     expect(turns).toEqual([
-      { role: "player", text: "Ich greife an.", diceRequest: null },
-      { role: "gm", text: "Der Goblin weicht aus.", diceRequest: { reason: "Angriff", hint: "W20" } },
+      { role: "player", text: "Ich greife an.", diceRequest: null, kind: "story" },
+      {
+        role: "gm",
+        text: "Der Goblin weicht aus.",
+        diceRequest: { reason: "Angriff", hint: "W20" },
+        kind: "story",
+      },
     ]);
   });
 

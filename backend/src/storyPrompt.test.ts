@@ -36,4 +36,17 @@ describe("renderTranscript", () => {
     expect(out).toContain("SPIELLEITER: Ihr steht am Eingang.");
     expect(out).toContain("SPIELER: Ich gehe hinein.");
   });
+
+  it("excludes aside turns while keeping surrounding story turns in order", () => {
+    const turns: StoredTurn[] = [
+      { role: "gm", text: "Ihr steht am Eingang.", diceRequest: null, kind: "story" },
+      { role: "player", text: "Wie heißt der Wirt?", diceRequest: null, kind: "aside" },
+      { role: "gm", text: "Er heißt Berthold.", diceRequest: null, kind: "aside" },
+      { role: "player", text: "Ich gehe hinein.", diceRequest: null, kind: "story" },
+    ];
+    const out = renderTranscript(turns);
+    expect(out).not.toContain("Wirt");
+    expect(out).not.toContain("Berthold");
+    expect(out).toBe("SPIELLEITER: Ihr steht am Eingang.\n\nSPIELER: Ich gehe hinein.");
+  });
 });

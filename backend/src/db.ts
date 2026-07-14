@@ -18,7 +18,8 @@ export function migrate(db: Database.Database): void {
       role TEXT NOT NULL,
       text TEXT NOT NULL,
       dice_reason TEXT,
-      dice_hint TEXT
+      dice_hint TEXT,
+      kind TEXT NOT NULL DEFAULT 'story'
     );
 
     CREATE INDEX IF NOT EXISTS idx_turns_campaign_seq ON turns(campaign_id, seq);
@@ -46,6 +47,18 @@ export function migrate(db: Database.Database): void {
 
     CREATE INDEX IF NOT EXISTS idx_characters_campaign ON characters(campaign_id);
   `);
+
+  // Databases created before the "kind" column existed need it backfilled;
+  // CREATE TABLE IF NOT EXISTS above only covers brand-new databases.
+  const hasKindColumn =
+    (
+      db.prepare("SELECT COUNT(*) AS n FROM pragma_table_info('turns') WHERE name = 'kind'").get() as {
+        n: number;
+      }
+    ).n > 0;
+  if (!hasKindColumn) {
+    db.exec(`ALTER TABLE turns ADD COLUMN kind TEXT NOT NULL DEFAULT 'story'`);
+  }
 }
 
 export function openDb(path: string): Database.Database {

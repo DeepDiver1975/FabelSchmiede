@@ -13,6 +13,26 @@ KONSISTENZ (SEHR WICHTIG):
   Wer als Person eingeführt wurde, bleibt eine Person; ein Ort bleibt ein Ort.
 `.trim();
 
+const ASIDE_RULES = `
+NACHFRAGE-MODUS (WICHTIG):
+- Der Spieler stellt hier eine Verständnisfrage zur Spielwelt "nebenbei"
+  (z. B. Namen, Fakten, Hintergrund) — dies ist KEINE Spielhandlung.
+- Beantworte die Frage informativ und knapp, direkt und aus der Warte des
+  Spielleiters (nicht in der Rolle einer Spielfigur).
+- Erfinde bei Bedarf plausible neue Fakten (Namen, Titel, Zusammenhänge), aber
+  nur wenn die Frage nicht bereits durch etwas oben Etabliertes beantwortet
+  ist — und diese Erfindungen werden ab sofort kanonisch und müssen in
+  Zukunft konsistent bleiben.
+- Führe die Szene NICHT weiter, verändere NICHTS an der aktuellen Situation,
+  löse KEINE neuen Ereignisse aus und stelle KEINE neue offene Frage wie
+  "Was tut ihr?".
+- Setze "diceRequest" IMMER auf null. Nachfragen erfordern niemals einen Wurf.
+
+ANTWORTFORMAT:
+Antworte ausschließlich als JSON-Objekt mit den Feldern "narration" (deine
+deutsche Antwort auf die Nachfrage) und "diceRequest" (immer null).
+`.trim();
+
 const DICE_AND_FORMAT_RULES = `
 REGELN FÜR DICH:
 - Würfle niemals selbst und erfinde niemals Würfelergebnisse.
@@ -57,6 +77,22 @@ ${premise}${openingSection(opening)}${partySection(party)}
 ${CONTINUITY_RULES}
 
 ${DICE_AND_FORMAT_RULES}
+`.trim();
+}
+
+export function buildAsideSystemPrompt(premise: string, opening?: string, party?: Character[]): string {
+  return `
+Du bist der Spielleiter (Game Master) und beantwortest gerade eine Nebenfrage
+außerhalb der eigentlichen Spielhandlung.
+
+${SCENE_BRIEF}
+
+SZENE DIESER KAMPAGNE:
+${premise}${openingSection(opening)}${partySection(party)}
+
+${CONTINUITY_RULES}
+
+${ASIDE_RULES}
 `.trim();
 }
 

@@ -5,6 +5,11 @@ export type GmReply = {
   diceRequest: DiceRequest | null;
 };
 
+// Orthogonal to `role` (who is speaking): `kind` says whether a turn advances
+// the story or is a side note. Absent/omitted always means "story" — asides
+// are the opt-in exception, not the default.
+export type TurnKind = "story" | "aside";
+
 // A turn in the conversation history. `diceRequest` is optional so callers may
 // omit it (e.g. player turns, or the opening gm turn which is dropped from the
 // message list); when a gm turn is replayed to the model it is folded back into
@@ -13,6 +18,7 @@ export type Turn = {
   role: "gm" | "player";
   text: string;
   diceRequest?: DiceRequest | null;
+  kind?: TurnKind;
 };
 
 export type CampaignStatus = "active" | "finished";
@@ -38,6 +44,7 @@ export type StoredTurn = {
   role: "gm" | "player";
   text: string;
   diceRequest: DiceRequest | null;
+  kind?: TurnKind;
 };
 
 export type Story = {

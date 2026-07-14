@@ -1,5 +1,11 @@
 export type DiceRequest = { reason: string; hint: string };
-export type Turn = { role: "gm" | "player"; text: string; diceRequest: DiceRequest | null };
+export type TurnKind = "story" | "aside";
+export type Turn = {
+  role: "gm" | "player";
+  text: string;
+  diceRequest: DiceRequest | null;
+  kind: TurnKind;
+};
 export type CampaignStatus = "active" | "finished";
 
 export type Campaign = {
@@ -71,7 +77,8 @@ export const api = {
   createCampaign: (name: string, premise: string) =>
     req<State>("/api/campaigns", "POST", { name, premise }),
   getState: (id: string) => req<State>(`/api/campaigns/${id}/state`, "GET"),
-  action: (id: string, text: string) => req<State>(`/api/campaigns/${id}/action`, "POST", { text }),
+  action: (id: string, text: string, kind: TurnKind = "story") =>
+    req<State>(`/api/campaigns/${id}/action`, "POST", { text, kind }),
   roll: (id: string, result: string) => req<State>(`/api/campaigns/${id}/roll`, "POST", { result }),
   finish: (id: string) => req<Campaign>(`/api/campaigns/${id}/finish`, "POST"),
   generateStory: (id: string) => req<Story>(`/api/campaigns/${id}/story`, "POST"),
