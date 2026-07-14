@@ -9,7 +9,7 @@ import { parseGmReply } from "./parseReply.js";
 import { GM_REPLY_SCHEMA } from "./types.js";
 import type { Character, GmReply, StoredTurn, Turn } from "./types.js";
 
-export type ClaudeCaller = (args: {
+export type LlmCaller = (args: {
   system: string;
   messages: { role: "user" | "assistant"; content: string }[];
   schema?: object;
@@ -18,7 +18,7 @@ export type ClaudeCaller = (args: {
 async function callWithRetry(
   system: string,
   messages: { role: "user" | "assistant"; content: string }[],
-  call: ClaudeCaller,
+  call: LlmCaller,
 ): Promise<GmReply> {
   const args = { system, messages, schema: GM_REPLY_SCHEMA };
   try {
@@ -32,7 +32,7 @@ async function callWithRetry(
 export async function generateGmReply(
   history: Turn[],
   premise: string,
-  call: ClaudeCaller,
+  call: LlmCaller,
   characters: Character[] = [],
 ): Promise<GmReply> {
   // The opening narration (first gm turn) is dropped from the message list by
@@ -51,7 +51,7 @@ export async function generateGmReply(
 export async function generateAsideReply(
   history: Turn[],
   premise: string,
-  call: ClaudeCaller,
+  call: LlmCaller,
   characters: Character[] = [],
 ): Promise<GmReply> {
   const opening = history[0]?.role === "gm" ? history[0].text : undefined;
@@ -64,7 +64,7 @@ export async function generateAsideReply(
 
 export async function generateOpening(
   premise: string,
-  call: ClaudeCaller,
+  call: LlmCaller,
   characters: Character[] = [],
 ): Promise<GmReply> {
   return callWithRetry(
@@ -77,7 +77,7 @@ export async function generateOpening(
 export async function generateStory(
   turns: StoredTurn[],
   campaign: { name: string; premise: string },
-  call: ClaudeCaller,
+  call: LlmCaller,
   characters: Character[] = [],
 ): Promise<string> {
   const markdown = await call({

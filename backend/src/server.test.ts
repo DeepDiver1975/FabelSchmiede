@@ -2,13 +2,13 @@ import { describe, it, expect, vi } from "vitest";
 import { buildServer } from "./server.js";
 import { CampaignStore } from "./campaignStore.js";
 import { openDb } from "./db.js";
-import type { ClaudeCaller } from "./gmEngine.js";
+import type { LlmCaller } from "./gmEngine.js";
 
 // Fake caller:
 //  - story requests (system contains "Kurzgeschichte") → markdown
 //  - a player message containing "angriff" → one dice request
 //  - everything else (incl. openings) → plain narration
-const fakeCall: ClaudeCaller = async ({ system, messages }) => {
+const fakeCall: LlmCaller = async ({ system, messages }) => {
   if (system.includes("Kurzgeschichte")) return "# Die Geschichte\n\nEs war einmal…";
   const last = messages[messages.length - 1];
   if (last?.role === "user" && last.content.toLowerCase().includes("angriff")) {
@@ -17,7 +17,7 @@ const fakeCall: ClaudeCaller = async ({ system, messages }) => {
   return '{"narration":"Es geschieht etwas.","diceRequest":null}';
 };
 
-function setup(call: ClaudeCaller = fakeCall) {
+function setup(call: LlmCaller = fakeCall) {
   const store = new CampaignStore(openDb(":memory:"));
   return { store, app: buildServer(call, store) };
 }
@@ -341,7 +341,7 @@ describe("server", () => {
     const store = new CampaignStore(openDb(":memory:"));
     // Deliberately returns a non-null diceRequest to prove the server strips it
     // for asides even if the model doesn't obey the prompt instruction.
-    const rogueCaller: ClaudeCaller = async () =>
+    const rogueCaller: LlmCaller = async () =>
       '{"narration":"Er heißt Berthold.","diceRequest":{"reason":"Sollte nie passieren","hint":"W20"}}';
     const app = buildServer(rogueCaller, store);
     const { campaign } = await createCampaign(app);

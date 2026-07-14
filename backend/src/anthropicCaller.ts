@@ -1,8 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
-import type { ClaudeCaller } from "./gmEngine.js";
+import type { LlmCaller } from "./gmEngine.js";
 import { extractText } from "./bedrockCaller.js";
 
-export function createAnthropicCaller(apiKey: string): ClaudeCaller {
+export function createAnthropicCaller(apiKey: string): LlmCaller {
   const client = new Anthropic({ apiKey });
   return async ({ system, messages }) => {
     const response = await client.messages.create({
