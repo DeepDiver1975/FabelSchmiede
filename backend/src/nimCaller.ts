@@ -13,7 +13,11 @@ export function createNimCaller(apiKey: string, model: string): LlmCaller {
         // OpenAI chat format has no separate system param — it's just the
         // first message with role "system".
         messages: [{ role: "system", content: system }, ...messages],
-        max_tokens: 4000,
+        // Reasoning NIM models (e.g. nemotron) spend a large, separate token
+        // budget on reasoning before emitting the answer; 4000 could truncate
+        // the JSON mid-output (finish_reason "length" → unparseable). Give ample
+        // headroom so the structured reply always completes.
+        max_tokens: 8000,
       }),
     });
     if (!response.ok) {
