@@ -199,3 +199,20 @@ button:disabled { opacity: 0.5; cursor: default; }
   opacity: 0.5;
 }
 .turn-audio:hover { opacity: 1; }
+
+/* Combat panel */
+.combat-panel { border: 1px solid var(--border); border-left: 3px solid var(--ember); border-radius: 6px; padding: 0.75rem 1rem; margin: 0.75rem 0; background-image: var(--parchment); }
+.combat-panel h2 { margin: 0 0 0.5rem; font-size: 1.1rem; }
+.combat-hint { font-size: 0.9rem; opacity: 0.85; }
+.combat-init-list, .combat-order { list-style: none; margin: 0.25rem 0; padding: 0; }
+.combat-init-row, .combat-order-row { display: flex; align-items: center; gap: 0.75rem; padding: 0.25rem 0; }
+.combat-init-row .combat-name { flex: 1; }
+.combat-init-row input { width: 6rem; }
+.combat-order-row .combat-init { width: 2rem; text-align: right; font-variant-numeric: tabular-nums; opacity: 0.8; }
+.combat-order-row .combat-name { flex: 1; }
+.combat-order-row .combat-hp { font-variant-numeric: tabular-nums; }
+.combat-order-row.enemy .combat-name { color: #b4472e; }
+.combat-order-row.current { font-weight: 700; background: rgba(164, 121, 91, 0.15); border-radius: 4px; }
+.combat-order-row.defeated { opacity: 0.5; text-decoration: line-through; }
+.combat-actions { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+.party-hp { opacity: 0.75; }

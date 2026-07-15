@@ -6,12 +6,13 @@ import {
   type CharacterInput,
   type CharacterNarrative,
   type CampaignBrief,
+  type CombatState,
 } from "./api.js";
 import { splitParagraphs } from "./prose.js";
 
-type CharacterForm = { id?: string; name: string; concept: string; narrative: CharacterNarrative };
+type CharacterForm = { id?: string; name: string; concept: string; maxHp: string; narrative: CharacterNarrative };
 
-const emptyForm: CharacterForm = { name: "", concept: "", narrative: {} };
+const emptyForm: CharacterForm = { name: "", concept: "", maxHp: "", narrative: {} };
 
 function CampaignBriefPanel({ brief }: { brief: State["brief"] }) {
   const [open, setOpen] = useState(false);
@@ -69,7 +70,7 @@ function PartyPanel({
   }
 
   function startEdit(c: Character) {
-    setForm({ id: c.id, name: c.name, concept: c.concept, narrative: { ...c.narrative } });
+    setForm({ id: c.id, name: c.name, concept: c.concept, maxHp: c.maxHp != null ? String(c.maxHp) : "", narrative: { ...c.narrative } });
     setMoreDetails(true);
   }
 
@@ -79,13 +80,16 @@ function PartyPanel({
     const concept = form.concept.trim();
     if (!name || !concept) return;
     const cleaned = cleanNarrative(form.narrative);
+    const parsedHp = form.maxHp.trim() === "" ? undefined : Number(form.maxHp);
+    const maxHp = parsedHp !== undefined && Number.isFinite(parsedHp) && parsedHp > 0 ? parsedHp : undefined;
     let ok: boolean;
     if (form.id) {
       // Edit always submits the complete current narrative (even {}), so a
       // cleared field actually clears on the server (PATCH replaces wholesale).
-      ok = await onUpdate(form.id, { name, concept, narrative: cleaned });
+      ok = await onUpdate(form.id, { name, concept, ...(maxHp !== undefined ? { maxHp } : {}), narrative: cleaned });
     } else {
       const input: CharacterInput = { name, concept };
+      if (maxHp !== undefined) input.maxHp = maxHp;
       if (Object.keys(cleaned).length > 0) input.narrative = cleaned;
       ok = await onCreate(input);
     }
@@ -109,6 +113,7 @@ function PartyPanel({
                 <div className="party-member-head">
                   <span>
                     <strong>{c.name}</strong> — {c.concept}
+                    {c.maxHp != null && <span className="party-hp"> · {c.maxHp} TP</span>}
                   </span>
                   {!readOnly && (
                     <span className="party-member-actions">
@@ -189,6 +194,13 @@ function PartyPanel({
                 onChange={(e) => setForm({ ...form, concept: e.target.value })}
                 placeholder="Konzept (z. B. Zwergischer Krieger)"
               />
+              <input
+                type="number"
+                min="1"
+                value={form.maxHp}
+                onChange={(e) => setForm({ ...form, maxHp: e.target.value })}
+                placeholder="Max. TP (z. B. 12)"
+              />
               <button type="button" onClick={() => setMoreDetails((m) => !m)}>
                 {moreDetails ? "Weniger Details" : "Mehr Details"}
               </button>
@@ -242,6 +254,77 @@ type PendingTurn = { kind: "action" | "roll" | "aside"; text: string; failed: bo
 
 function pendingTurnText(t: PendingTurn): string {
   return t.kind === "roll" ? `[Würfelergebnis: ${t.text}]` : t.text;
+}
+
+function CombatPanel({
+  combat,
+  busy,
+  onSubmitInitiative,
+  onAdvance,
+  onEnd,
+}: {
+  combat: CombatState;
+  busy: boolean;
+  onSubmitInitiative: (values: { id: string; value: number }[]) => void;
+  onAdvance: () => void;
+  onEnd: () => void;
+}) {
+  const [rolls, setRolls] = useState<Record<string, string>>({});
+  const rolling = combat.phase === "rolling-initiative";
+  const allFilled = combat.combatants.every((c) => {
+    const v = rolls[c.id];
+    return v !== undefined && v.trim() !== "" && Number.isFinite(Number(v));
+  });
+
+  function submit() {
+    const values = combat.combatants.map((c) => ({ id: c.id, value: Number(rolls[c.id]) }));
+    onSubmitInitiative(values);
+  }
+
+  return (
+    <section className="combat-panel">
+      <h2>⚔️ Kampf</h2>
+      {rolling ? (
+        <>
+          <p className="combat-hint">Initiative auswürfeln — für jede Figur einen W20 werfen (Gegner würfelt die SL):</p>
+          <ul className="combat-init-list">
+            {combat.combatants.map((c) => (
+              <li key={c.id} className={`combat-init-row ${c.side}`}>
+                <span className="combat-name">{c.name}</span>
+                <input
+                  type="number"
+                  value={rolls[c.id] ?? ""}
+                  onChange={(e) => setRolls((r) => ({ ...r, [c.id]: e.target.value }))}
+                  placeholder="Initiative"
+                  disabled={busy}
+                />
+              </li>
+            ))}
+          </ul>
+          <button onClick={submit} disabled={busy || !allFilled}>Alle senden</button>
+        </>
+      ) : (
+        <>
+          <ol className="combat-order">
+            {combat.combatants.map((c, i) => (
+              <li
+                key={c.id}
+                className={`combat-order-row ${c.side}${c.defeated ? " defeated" : ""}${i === combat.turnIndex ? " current" : ""}`}
+              >
+                <span className="combat-init">{c.initiative ?? "—"}</span>
+                <span className="combat-name">{c.name}</span>
+                <span className="combat-hp">{c.defeated ? "besiegt" : `${c.hp}/${c.maxHp} TP`}</span>
+              </li>
+            ))}
+          </ol>
+          <div className="combat-actions">
+            <button onClick={onAdvance} disabled={busy}>Zug beenden</button>
+            <button onClick={onEnd} disabled={busy}>Kampf beenden</button>
+          </div>
+        </>
+      )}
+    </section>
+  );
 }
 
 export function PlayView({
@@ -335,6 +418,41 @@ export function PlayView({
       await refetchState();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  async function submitInitiative(values: { id: string; value: number }[]) {
+    setBusy(true);
+    setError(null);
+    try {
+      setState(await api.submitInitiative(id, values));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function advanceTurn() {
+    setBusy(true);
+    setError(null);
+    try {
+      setState(await api.advanceTurn(id));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function endCombat() {
+    if (!confirm("Kampf wirklich beenden?")) return;
+    setBusy(true);
+    setError(null);
+    try {
+      setState(await api.endCombat(id));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -435,6 +553,16 @@ export function PlayView({
         onDelete={deleteCharacter}
       />
 
+      {state.combat?.active && (
+        <CombatPanel
+          combat={state.combat}
+          busy={busy}
+          onSubmitInitiative={submitInitiative}
+          onAdvance={advanceTurn}
+          onEnd={endCombat}
+        />
+      )}
+
       <section className="transcript">
         {state.turns.map((t, i) => {
           const aside = t.kind === "aside";
@@ -489,7 +617,13 @@ export function PlayView({
 
       {pending ? (
         <section className="dice">
-          <p><strong>Wurf nötig:</strong> {pending.reason} ({pending.hint})</p>
+          <p>
+            <strong>Wurf nötig:</strong>{" "}
+            {state.combat?.phase === "in-turns" && state.combat.combatants[state.combat.turnIndex]
+              ? `${state.combat.combatants[state.combat.turnIndex].name}: `
+              : ""}
+            {pending.reason} ({pending.hint})
+          </p>
           <input
             value={roll}
             onChange={(e) => setRoll(e.target.value)}
