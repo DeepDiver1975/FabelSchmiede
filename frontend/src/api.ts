@@ -106,6 +106,8 @@ export const api = {
   listCampaigns: () => req<CampaignSummary[]>("/api/campaigns", "GET"),
   createCampaign: (name: string, premise: string) =>
     req<State>("/api/campaigns", "POST", { name, premise }),
+  // Generate the opening scene once the party is set up (see SetupView).
+  begin: (id: string) => req<State>(`/api/campaigns/${id}/begin`, "POST"),
   getState: (id: string) => req<State>(`/api/campaigns/${id}/state`, "GET"),
   action: (id: string, text: string, kind: TurnKind = "story") =>
     req<State>(`/api/campaigns/${id}/action`, "POST", { text, kind }),

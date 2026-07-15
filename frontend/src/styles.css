@@ -216,3 +216,7 @@ button:disabled { opacity: 0.5; cursor: default; }
 .combat-order-row.defeated { opacity: 0.5; text-decoration: line-through; }
 .combat-actions { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
 .party-hp { opacity: 0.75; }
+
+.setup-hint { opacity: 0.8; font-size: 0.92rem; margin: 0.5rem 0; }
+.begin-adventure { margin-top: 0.75rem; font-size: 1.05rem; padding: 0.6rem 1.1rem; }
+.begin-adventure:disabled { opacity: 0.5; cursor: not-allowed; }
