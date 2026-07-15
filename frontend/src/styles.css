@@ -217,6 +217,18 @@ button:disabled { opacity: 0.5; cursor: default; }
 .combat-actions { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
 .party-hp { opacity: 0.75; }
 
+/* During combat the play screen becomes two columns: narration (left) + a
+   sticky combat tracker (right). Single reading column otherwise. */
+.app.app-combat { max-width: 1180px; display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 1.5rem; align-items: start; }
+.combat-sidebar { position: sticky; top: 1.5rem; }
+.combat-sidebar .combat-panel { margin-top: 0; }
+
+/* Narrow screens: stack, and pin the tracker to the top as a bar. */
+@media (max-width: 900px) {
+  .app.app-combat { grid-template-columns: 1fr; }
+  .combat-sidebar { order: -1; position: sticky; top: 0; z-index: 5; }
+}
+
 .setup-hint { opacity: 0.8; font-size: 0.92rem; margin: 0.5rem 0; }
 .begin-adventure { margin-top: 0.75rem; font-size: 1.05rem; padding: 0.6rem 1.1rem; }
 .begin-adventure:disabled { opacity: 0.5; cursor: not-allowed; }

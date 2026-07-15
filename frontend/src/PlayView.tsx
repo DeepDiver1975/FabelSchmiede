@@ -68,7 +68,12 @@ function CombatPanel({
 
   return (
     <section className="combat-panel">
-      <h2>⚔️ Kampf</h2>
+      <h2>
+        ⚔️ Kampf
+        {combat.phase === "in-turns" &&
+          combat.combatants[combat.turnIndex] &&
+          ` — Am Zug: ${combat.combatants[combat.turnIndex].name}`}
+      </h2>
       {rolling ? (
         <>
           <p className="combat-hint">Initiative auswürfeln — für jede Figur einen W20 werfen (Gegner würfelt die SL):</p>
@@ -310,7 +315,8 @@ export function PlayView({
   }, [state.turns]);
 
   return (
-    <main className="app">
+    <main className={`app${state.combat?.active ? " app-combat" : ""}`}>
+      <div className="play-main">
       <header>
         <h1>{state.campaign.name}</h1>
         <div className="header-actions">
@@ -337,16 +343,6 @@ export function PlayView({
         onUpdate={updateCharacter}
         onDelete={deleteCharacter}
       />
-
-      {state.combat?.active && (
-        <CombatPanel
-          combat={state.combat}
-          busy={busy}
-          onSubmitInitiative={submitInitiative}
-          onAdvance={advanceTurn}
-          onEnd={endCombat}
-        />
-      )}
 
       <section className="transcript">
         {state.turns.map((t, i) => {
@@ -440,6 +436,19 @@ export function PlayView({
           />
           <button onClick={submitAction} disabled={busy}>{asideMode ? "Fragen" : "Handeln"}</button>
         </section>
+      )}
+      </div>
+
+      {state.combat?.active && (
+        <aside className="combat-sidebar">
+          <CombatPanel
+            combat={state.combat}
+            busy={busy}
+            onSubmitInitiative={submitInitiative}
+            onAdvance={advanceTurn}
+            onEnd={endCombat}
+          />
+        </aside>
       )}
     </main>
   );
