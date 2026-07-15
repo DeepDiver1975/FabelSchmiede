@@ -5,6 +5,36 @@ function isStringArray(v: unknown): v is string[] {
   return Array.isArray(v) && v.every((x) => typeof x === "string");
 }
 
+// The arc fields (outline/hooks/branchPoints) are LOOSE narrative text fed to
+// the GM as prose — not mechanics. Non-schema NIM models (observed with
+// nemotron ~1 in 3) return them in richer shapes: outline as a string ARRAY,
+// branchPoints as OBJECTS like {prompt, options}. Coerce those to text rather
+// than 500 the whole campaign. See renderPlan for how they're consumed.
+function toText(v: unknown): string {
+  if (v == null) return "";
+  if (typeof v === "string") return v;
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  if (Array.isArray(v)) return v.map(toText).filter((s) => s.trim()).join(" ");
+  if (typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    // A wrapped string, e.g. {prompt: "…"} / {hook: "…"} — prefer the obvious key.
+    for (const k of ["prompt", "text", "question", "hook", "description", "title", "name", "outline"]) {
+      if (typeof o[k] === "string" && o[k]) return o[k] as string;
+    }
+    return Object.values(o).map(toText).filter((s) => s.trim()).join(" — ");
+  }
+  return "";
+}
+
+// Coerce a "list of narrative strings" that the model may have returned as a
+// single string, or as an array of wrapper objects, into string[].
+function toStringList(v: unknown): string[] {
+  if (isStringArray(v)) return v;
+  if (Array.isArray(v)) return v.map(toText).map((s) => s.trim()).filter(Boolean);
+  const s = toText(v).trim();
+  return s ? [s] : [];
+}
+
 function toNpc(v: unknown): PlanNpc {
   const o = v as Record<string, unknown>;
   if (
@@ -31,11 +61,14 @@ function toLocation(v: unknown): PlanLocation {
 }
 
 function toArc(v: unknown): PlanArc {
-  const o = v as Record<string, unknown>;
-  if (typeof o?.outline !== "string" || !isStringArray(o?.hooks) || !isStringArray(o?.branchPoints)) {
+  const o = (v ?? {}) as Record<string, unknown>;
+  const outline = toText(o.outline).trim();
+  // outline is the arc's spine; an empty one means the model gave us nothing
+  // usable, so still fail (and let generatePlan's retry-once try again).
+  if (!outline) {
     throw new Error("plan arc was malformed");
   }
-  return { outline: o.outline, hooks: o.hooks, branchPoints: o.branchPoints };
+  return { outline, hooks: toStringList(o.hooks), branchPoints: toStringList(o.branchPoints) };
 }
 
 export function parsePlan(raw: string): CampaignPlan {

@@ -37,4 +37,42 @@ describe("parsePlan", () => {
     bad.npcs = [{ name: "X" }];
     expect(() => parsePlan(JSON.stringify(bad))).toThrow();
   });
+
+  // Observed with NIM/nemotron (~1 in 3 plans): the model returns arc.outline as
+  // a string ARRAY and arc.branchPoints as OBJECTS {prompt, options}. These are
+  // loose narrative fields fed to the GM as prose, so coerce them to strings
+  // rather than 500 the whole campaign creation.
+  it("coerces an arc whose outline is a string array and branchPoints are objects", () => {
+    const v = JSON.parse(valid);
+    v.arc = {
+      outline: ["Anfang: Der Überfall.", "Mitte: Die Höhle.", "Ende: Das Ritual."],
+      hooks: ["Vermisste Kinder", "Seltsame Runen"],
+      branchPoints: [
+        { prompt: "Den Kult stellen oder fliehen?", options: ["stellen", "fliehen"] },
+        { prompt: "Dem Boten trauen?", options: ["ja", "nein"] },
+      ],
+    };
+    const p = parsePlan(JSON.stringify(v));
+    expect(typeof p.arc.outline).toBe("string");
+    expect(p.arc.outline).toContain("Anfang");
+    expect(p.arc.outline).toContain("Ende");
+    expect(p.arc.hooks).toEqual(["Vermisste Kinder", "Seltsame Runen"]);
+    expect(p.arc.branchPoints).toHaveLength(2);
+    expect(p.arc.branchPoints.every((b) => typeof b === "string")).toBe(true);
+    expect(p.arc.branchPoints[0]).toContain("Den Kult stellen");
+  });
+
+  it("coerces hooks given as wrapper objects", () => {
+    const v = JSON.parse(valid);
+    v.arc = { outline: "X", hooks: [{ hook: "Ein Flüstern im Wald" }], branchPoints: ["A"] };
+    const p = parsePlan(JSON.stringify(v));
+    expect(p.arc.hooks.every((h) => typeof h === "string")).toBe(true);
+    expect(p.arc.hooks[0]).toContain("Flüstern");
+  });
+
+  it("still throws when the arc has no usable outline", () => {
+    const v = JSON.parse(valid);
+    v.arc = { hooks: [], branchPoints: [] };
+    expect(() => parsePlan(JSON.stringify(v))).toThrow();
+  });
 });
