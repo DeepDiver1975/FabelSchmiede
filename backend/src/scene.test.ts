@@ -13,4 +13,8 @@ describe("scene", () => {
     expect(SCENE_BRIEF).toContain("AUSSCHLIESSLICH auf Deutsch");
     expect(SCENE_BRIEF).toContain("niemals auf Englisch");
   });
+
+  it("no longer pushes the GM to proactively drive the plot forward", () => {
+    expect(SCENE_BRIEF).not.toContain("Handlung in Bewegung");
+  });
 });
