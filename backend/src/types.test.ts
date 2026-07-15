@@ -2,12 +2,12 @@ import { describe, it, expect } from "vitest";
 import { GM_REPLY_SCHEMA } from "./types.js";
 
 describe("GM_REPLY_SCHEMA", () => {
-  it("requires narration and diceRequest, forbids extra props", () => {
+  it("requires narration, diceRequest, and combat, forbids extra props", () => {
     expect(GM_REPLY_SCHEMA.type).toBe("object");
     expect(GM_REPLY_SCHEMA.additionalProperties).toBe(false);
-    expect(GM_REPLY_SCHEMA.required).toEqual(["narration", "diceRequest"]);
+    expect(GM_REPLY_SCHEMA.required).toEqual(["narration", "diceRequest", "combat"]);
     expect(Object.keys(GM_REPLY_SCHEMA.properties)).toEqual(
-      expect.arrayContaining(["narration", "diceRequest"]),
+      expect.arrayContaining(["narration", "diceRequest", "combat"]),
     );
   });
 

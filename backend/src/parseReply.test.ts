@@ -46,3 +46,36 @@ describe("parseGmReply", () => {
     expect(() => parseGmReply("Ich kann das leider nicht.")).toThrow();
   });
 });
+
+describe("parseGmReply — combat", () => {
+  it("defaults combat to null when absent", () => {
+    const r = parseGmReply('{"narration":"Ruhe.","diceRequest":null}');
+    expect(r.combat).toBeNull();
+  });
+
+  it("parses a start event with enemies", () => {
+    const raw =
+      '{"narration":"Goblins!","diceRequest":null,"combat":{"event":"start","target":null,"amount":null,"enemies":[{"name":"Goblin","count":3,"hp":7}]}}';
+    const r = parseGmReply(raw);
+    expect(r.combat).toEqual({ event: "start", enemies: [{ name: "Goblin", count: 3, hp: 7 }] });
+  });
+
+  it("parses a damage event", () => {
+    const raw =
+      '{"narration":"Treffer!","diceRequest":null,"combat":{"event":"damage","target":"Goblin 2","amount":5,"enemies":null}}';
+    const r = parseGmReply(raw);
+    expect(r.combat).toEqual({ event: "damage", target: "Goblin 2", amount: 5 });
+  });
+
+  it("parses an end event", () => {
+    const raw =
+      '{"narration":"Vorbei.","diceRequest":null,"combat":{"event":"end","target":null,"amount":null,"enemies":null}}';
+    const r = parseGmReply(raw);
+    expect(r.combat).toEqual({ event: "end" });
+  });
+
+  it("treats a malformed combat block as an error (triggers retry upstream)", () => {
+    const raw = '{"narration":"x","diceRequest":null,"combat":{"event":"damage","target":"Goblin 2"}}';
+    expect(() => parseGmReply(raw)).toThrow();
+  });
+});

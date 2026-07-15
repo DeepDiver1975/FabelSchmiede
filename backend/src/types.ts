@@ -3,6 +3,7 @@ export type DiceRequest = { reason: string; hint: string };
 export type GmReply = {
   narration: string;
   diceRequest: DiceRequest | null;
+  combat: CombatEvent | null;
 };
 
 // Orthogonal to `role` (who is speaking): `kind` says whether a turn advances
@@ -163,7 +164,7 @@ export type PcSeed = {
 export const GM_REPLY_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["narration", "diceRequest"],
+  required: ["narration", "diceRequest", "combat"],
   properties: {
     narration: { type: "string" },
     diceRequest: {
@@ -175,6 +176,39 @@ export const GM_REPLY_SCHEMA = {
           properties: {
             reason: { type: "string" },
             hint: { type: "string" },
+          },
+        },
+        { type: "null" },
+      ],
+    },
+    combat: {
+      anyOf: [
+        {
+          type: "object",
+          additionalProperties: false,
+          required: ["event", "target", "amount", "enemies"],
+          properties: {
+            event: { enum: ["start", "damage", "heal", "defeat", "end"] },
+            target: { anyOf: [{ type: "string" }, { type: "null" }] },
+            amount: { anyOf: [{ type: "number" }, { type: "null" }] },
+            enemies: {
+              anyOf: [
+                {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    additionalProperties: false,
+                    required: ["name", "count", "hp"],
+                    properties: {
+                      name: { type: "string" },
+                      count: { type: "number" },
+                      hp: { type: "number" },
+                    },
+                  },
+                },
+                { type: "null" },
+              ],
+            },
           },
         },
         { type: "null" },
