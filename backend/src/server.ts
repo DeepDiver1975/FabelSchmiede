@@ -9,6 +9,7 @@ import {
   generatePlan,
   type LlmCaller,
 } from "./gmEngine.js";
+import { applyCombatEvent } from "./combat.js";
 import { toBrief } from "./campaignPlan.js";
 import { createBedrockCaller } from "./bedrockCaller.js";
 import { createAnthropicCaller } from "./anthropicCaller.js";
@@ -43,7 +44,7 @@ export function buildServer(
     const characters = store.listCharacters(id);
     const stored = store.getPlan(id);
     const brief = stored ? toBrief(stored.plan) : null;
-    return { campaign, turns, pendingDice: pendingFrom(turns), characters, brief, ttsEnabled: synth !== null };
+    return { campaign, turns, pendingDice: pendingFrom(turns), characters, brief, combat: store.getCombat(id), ttsEnabled: synth !== null };
   }
 
   // Shared handler for action + roll + aside: never persist unless the GM
@@ -69,7 +70,14 @@ export function buildServer(
       gm =
         kind === "aside"
           ? await generateAsideReply(session.getHistory(), campaign.premise, call, characters, plan)
-          : await generateGmReply(session.getHistory(), campaign.premise, call, characters, plan);
+          : await generateGmReply(
+              session.getHistory(),
+              campaign.premise,
+              call,
+              characters,
+              plan,
+              store.getCombat(id) ?? undefined,
+            );
     } catch (err) {
       reply.log.error({ err, campaignId: id, playerText }, "GM reply failed (verhaspelt)");
       return reply.code(500).send({ error: VERHASPELT });
@@ -83,6 +91,12 @@ export function buildServer(
         kind,
       },
     ]);
+    if (kind !== "aside" && gm.combat) {
+      const pcs = characters.map((c) => ({ id: c.id, name: c.name, maxHp: c.maxHp ?? 0 }));
+      const next = applyCombatEvent(store.getCombat(id), gm.combat, pcs);
+      if (next) store.saveCombat(id, next);
+      else store.clearCombat(id);
+    }
     return stateOf(id);
   }
 

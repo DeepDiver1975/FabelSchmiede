@@ -475,6 +475,40 @@ describe("server", () => {
     expect(lastCall.system).toContain("Thorin");
     await app.close();
   });
+
+  it("applies a start event and exposes combat in state", async () => {
+    const combatCall: LlmCaller = async ({ system, messages }) => {
+      if (system.includes("Abenteuer-Architekt")) return fakePlanJson;
+      const last = messages[messages.length - 1];
+      if (last?.role === "user" && last.content.toLowerCase().includes("kampf")) {
+        return '{"narration":"Goblins stürmen heran!","diceRequest":null,"combat":{"event":"start","target":null,"amount":null,"enemies":[{"name":"Goblin","count":2,"hp":7}]}}';
+      }
+      return '{"narration":"Es geschieht etwas.","diceRequest":null,"combat":null}';
+    };
+    const store = new CampaignStore(openDb(":memory:"));
+    const app = buildServer(combatCall, store);
+    const created = await createCampaign(app);
+    const id = created.campaign.id;
+    await app.inject({
+      method: "POST",
+      url: `/api/campaigns/${id}/characters`,
+      payload: { name: "Thalia", concept: "Magierin", maxHp: 12 },
+    });
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/campaigns/${id}/action`,
+      payload: { text: "Wir stellen uns zum Kampf" },
+    });
+    const state = res.json();
+    expect(state.combat).not.toBeNull();
+    expect(state.combat.active).toBe(true);
+    expect(state.combat.combatants.map((c: { name: string }) => c.name)).toEqual([
+      "Thalia",
+      "Goblin 1",
+      "Goblin 2",
+    ]);
+    await app.close();
+  });
 });
 
 describe("turn audio endpoint", () => {
