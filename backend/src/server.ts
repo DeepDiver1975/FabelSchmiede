@@ -177,6 +177,7 @@ export function buildServer(
         name,
         concept,
         ...(body.level !== undefined ? { level: body.level } : {}),
+        ...(body.maxHp !== undefined ? { maxHp: body.maxHp } : {}),
         ...(body.narrative !== undefined ? { narrative: body.narrative } : {}),
         ...(body.abilities !== undefined ? { abilities: body.abilities } : {}),
         ...(body.resources !== undefined ? { resources: body.resources } : {}),

@@ -641,4 +641,27 @@ describe("turn audio endpoint", () => {
     expect(store.getTurnAudio(campaign.id, 0)).toBeNull();
     await app.close();
   });
+
+  it("PATCH updates a character's maxHp", async () => {
+    const { app } = setup();
+    const created = await createCampaign(app);
+    const id = created.campaign.id;
+    const c = (
+      await app.inject({
+        method: "POST",
+        url: `/api/campaigns/${id}/characters`,
+        payload: { name: "Thalia", concept: "Magierin" },
+      })
+    ).json();
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/campaigns/${id}/characters/${c.id}`,
+      payload: { maxHp: 15 },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().maxHp).toBe(15);
+    const state = (await app.inject({ method: "GET", url: `/api/campaigns/${id}/state` })).json();
+    expect(state.characters.find((x: { id: string }) => x.id === c.id).maxHp).toBe(15);
+    await app.close();
+  });
 });
