@@ -49,7 +49,29 @@ REGELN FÜR DICH:
 
 ANTWORTFORMAT:
 Antworte ausschließlich als JSON-Objekt mit den Feldern "narration" (dein
-deutscher Erzähltext) und "diceRequest" (Objekt {reason, hint} oder null).
+deutscher Erzähltext), "diceRequest" (Objekt {reason, hint} oder null) und
+"combat" (Kampf-Ereignis oder null — siehe die Kampf-Regeln, sofern vorhanden).
+`.trim();
+
+// How the GM *begins* a combat. This must live in the base play prompt: the
+// detailed in-combat rules (renderCombat) only appear once a fight is already
+// active, so without this the model never emits the "start" event and the
+// code-side combat tracker never turns on. Initiative is collected by the app,
+// so the GM must NOT also ask for an initiative roll here.
+const COMBAT_START_RULES = `
+KAMPF-BEGINN (SEHR WICHTIG):
+- Wenn ein Kampf beginnt (die Gruppe greift an oder wird angegriffen), setze
+  das Feld "combat" auf ein Start-Ereignis, das die Gegner auflistet:
+  {"event":"start","enemies":[{"name":"Goblin","count":3,"hp":7}]}
+  Gib für jede Gegnerart den Namen ("name"), die Anzahl ("count") und die
+  Trefferpunkte pro Gegner ("hp") an. Schätze die Trefferpunkte passend zur
+  Gefährlichkeit (schwacher Gegner ~5–10, zäher Gegner ~15–30).
+- Setze in genau diesem Zug "diceRequest" auf null. Die Initiative würfelt die
+  Gruppe selbst über die App aus — fordere hier KEINEN Wurf an. Erzähle nur
+  atmosphärisch, dass der Kampf ausbricht, und HALTE DANN AN.
+- Läuft bereits ein Kampf (Abschnitt "KAMPF LÄUFT" oben), starte KEINEN neuen —
+  nutze stattdessen die dortigen Ereignisse (damage/heal/defeat/end).
+- In allen anderen Fällen (kein Kampf) setze "combat" auf null.
 `.trim();
 
 // The opening narration is a gm turn and is dropped from the message list
@@ -160,6 +182,8 @@ SZENE DIESER KAMPAGNE:
 ${premise}${openingSection(opening)}${partySection(party)}${planSection(plan)}${combatSection(combat)}
 
 ${CONTINUITY_RULES}
+
+${COMBAT_START_RULES}
 
 ${DICE_AND_FORMAT_RULES}
 `.trim();

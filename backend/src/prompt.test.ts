@@ -37,6 +37,17 @@ describe("buildSystemPrompt", () => {
     // A fresh campaign with no prior opening must not leave a dangling heading.
     expect(buildSystemPrompt("Goblins im Nebelwald")).not.toContain("BISHERIGER VERLAUF");
   });
+
+  it("instructs the GM how to START combat via a combat start event", () => {
+    // Without this, the model never emits combat.start and the tracker never
+    // turns on. It must name the start event and tell the GM not to also ask
+    // for an initiative roll (the app collects those).
+    const p = buildSystemPrompt("Goblins im Nebelwald");
+    expect(p).toContain("KAMPF-BEGINN");
+    expect(p).toContain('"event":"start"');
+    expect(p).toContain("Initiative"); // app collects it; GM sets diceRequest null
+    expect(p).toContain("combat"); // combat field named in the response format
+  });
 });
 
 describe("buildOpeningSystemPrompt", () => {
