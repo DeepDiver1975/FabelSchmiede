@@ -68,4 +68,13 @@ describe("db", () => {
     expect(cols).toContain("max_hp");
     db.close();
   });
+
+  it("creates the combats table", () => {
+    const db = openDb(":memory:");
+    const names = (db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as { name: string }[]).map(
+      (r) => r.name,
+    );
+    expect(names).toContain("combats");
+    db.close();
+  });
 });

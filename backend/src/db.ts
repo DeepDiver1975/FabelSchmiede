@@ -36,6 +36,12 @@ export function migrate(db: Database.Database): void {
       generated_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS combats (
+      campaign_id TEXT PRIMARY KEY REFERENCES campaigns(id),
+      state TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS turn_audio (
       campaign_id TEXT NOT NULL REFERENCES campaigns(id),
       seq INTEGER NOT NULL,

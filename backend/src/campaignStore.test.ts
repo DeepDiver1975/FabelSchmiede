@@ -270,3 +270,23 @@ describe("CampaignStore turn audio", () => {
     expect(Buffer.compare(got!.audio, Buffer.from([2, 2]))).toBe(0);
   });
 });
+
+describe("CampaignStore combat", () => {
+  it("saves, reads, and clears combat state", () => {
+    const store = new CampaignStore(openDb(":memory:"));
+    const c = store.createCampaign("K", "P");
+    expect(store.getCombat(c.id)).toBeNull();
+    const state = {
+      active: true,
+      phase: "rolling-initiative" as const,
+      combatants: [
+        { id: "goblin-1", name: "Goblin 1", side: "enemy" as const, maxHp: 7, hp: 7, initiative: null, defeated: false },
+      ],
+      turnIndex: 0,
+    };
+    store.saveCombat(c.id, state);
+    expect(store.getCombat(c.id)).toEqual(state);
+    store.clearCombat(c.id);
+    expect(store.getCombat(c.id)).toBeNull();
+  });
+});

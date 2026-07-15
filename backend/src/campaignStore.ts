@@ -8,6 +8,7 @@ import type {
   Character,
   CharacterInput,
   CharacterNarrative,
+  CombatState,
   DiceRequest,
   ResourcePool,
   StoredPlan,
@@ -177,6 +178,26 @@ export class CampaignStore {
       .get(campaignId) as { plan: string; generated_at: string } | undefined;
     if (!row) return null;
     return { plan: JSON.parse(row.plan) as CampaignPlan, generated_at: row.generated_at };
+  }
+
+  getCombat(campaignId: string): CombatState | null {
+    const row = this.db
+      .prepare("SELECT state FROM combats WHERE campaign_id = ?")
+      .get(campaignId) as { state: string } | undefined;
+    return row ? (JSON.parse(row.state) as CombatState) : null;
+  }
+
+  saveCombat(campaignId: string, state: CombatState): void {
+    this.db
+      .prepare(
+        `INSERT INTO combats (campaign_id, state, updated_at) VALUES (?, ?, ?)
+         ON CONFLICT(campaign_id) DO UPDATE SET state = excluded.state, updated_at = excluded.updated_at`,
+      )
+      .run(campaignId, JSON.stringify(state), new Date().toISOString());
+  }
+
+  clearCombat(campaignId: string): void {
+    this.db.prepare("DELETE FROM combats WHERE campaign_id = ?").run(campaignId);
   }
 
   createCharacter(campaignId: string, input: CharacterInput): Character {
