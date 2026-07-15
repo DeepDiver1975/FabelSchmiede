@@ -9,7 +9,7 @@ import {
   generatePlan,
   type LlmCaller,
 } from "./gmEngine.js";
-import { applyCombatEvent } from "./combat.js";
+import { applyCombatEvent, submitInitiative, advanceTurn } from "./combat.js";
 import { toBrief } from "./campaignPlan.js";
 import { createBedrockCaller } from "./bedrockCaller.js";
 import { createAnthropicCaller } from "./anthropicCaller.js";
@@ -219,6 +219,41 @@ export function buildServer(
       return play(req.params.id, `[Würfelergebnis: ${result}]`, "story", reply);
     },
   );
+
+  app.post<{ Params: { id: string }; Body: { values: { id: string; value: number }[] } }>(
+    "/api/campaigns/:id/combat/initiative",
+    async (req, reply) => {
+      const campaign = store.getCampaign(req.params.id);
+      if (!campaign) return reply.code(404).send({ error: "Kampagne nicht gefunden." });
+      const combat = store.getCombat(req.params.id);
+      if (!combat || combat.phase !== "rolling-initiative")
+        return reply.code(409).send({ error: "Es wird gerade keine Initiative ausgewürfelt." });
+      if (combat.combatants.some((c) => c.maxHp <= 0))
+        return reply
+          .code(400)
+          .send({ error: "Bitte zuerst Trefferpunkte (TP) für alle Charaktere in der Gruppe setzen." });
+      const values = Array.isArray(req.body?.values) ? req.body.values : [];
+      store.saveCombat(req.params.id, submitInitiative(combat, values));
+      return stateOf(req.params.id);
+    },
+  );
+
+  app.post<{ Params: { id: string } }>("/api/campaigns/:id/combat/advance", async (req, reply) => {
+    const campaign = store.getCampaign(req.params.id);
+    if (!campaign) return reply.code(404).send({ error: "Kampagne nicht gefunden." });
+    const combat = store.getCombat(req.params.id);
+    if (!combat || combat.phase !== "in-turns")
+      return reply.code(409).send({ error: "Es läuft gerade kein Kampf mit Zugreihenfolge." });
+    store.saveCombat(req.params.id, advanceTurn(combat));
+    return stateOf(req.params.id);
+  });
+
+  app.post<{ Params: { id: string } }>("/api/campaigns/:id/combat/end", async (req, reply) => {
+    const campaign = store.getCampaign(req.params.id);
+    if (!campaign) return reply.code(404).send({ error: "Kampagne nicht gefunden." });
+    store.clearCombat(req.params.id);
+    return stateOf(req.params.id);
+  });
 
   app.post<{ Params: { id: string } }>("/api/campaigns/:id/finish", async (req, reply) => {
     const campaign = store.getCampaign(req.params.id);

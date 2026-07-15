@@ -509,6 +509,67 @@ describe("server", () => {
     ]);
     await app.close();
   });
+
+  it("runs the initiative -> advance -> end control flow", async () => {
+    const combatCall: LlmCaller = async ({ system, messages }) => {
+      if (system.includes("Abenteuer-Architekt")) return fakePlanJson;
+      const last = messages[messages.length - 1];
+      if (last?.role === "user" && last.content.toLowerCase().includes("kampf")) {
+        return '{"narration":"Kampf!","diceRequest":null,"combat":{"event":"start","target":null,"amount":null,"enemies":[{"name":"Goblin","count":1,"hp":7}]}}';
+      }
+      return '{"narration":"…","diceRequest":null,"combat":null}';
+    };
+    const store = new CampaignStore(openDb(":memory:"));
+    const app = buildServer(combatCall, store);
+    const created = await createCampaign(app);
+    const id = created.campaign.id;
+    await app.inject({ method: "POST", url: `/api/campaigns/${id}/characters`, payload: { name: "Thalia", concept: "Magierin", maxHp: 12 } });
+    await app.inject({ method: "POST", url: `/api/campaigns/${id}/action`, payload: { text: "Kampf beginnt" } });
+    const state0 = (await app.inject({ method: "GET", url: `/api/campaigns/${id}/state` })).json();
+    const ids = state0.combat.combatants.map((c: { id: string }) => c.id); // [thalia-id, "goblin"]
+
+    const initRes = await app.inject({
+      method: "POST",
+      url: `/api/campaigns/${id}/combat/initiative`,
+      payload: { values: [{ id: ids[0], value: 20 }, { id: ids[1], value: 5 }] },
+    });
+    const s1 = initRes.json();
+    expect(s1.combat.phase).toBe("in-turns");
+    expect(s1.combat.combatants[0].name).toBe("Thalia");
+
+    const advRes = await app.inject({ method: "POST", url: `/api/campaigns/${id}/combat/advance` });
+    expect(advRes.json().combat.turnIndex).toBe(1);
+
+    const endRes = await app.inject({ method: "POST", url: `/api/campaigns/${id}/combat/end` });
+    expect(endRes.json().combat).toBeNull();
+    await app.close();
+  });
+
+  it("rejects initiative when a PC has no maxHp set", async () => {
+    const combatCall: LlmCaller = async ({ system, messages }) => {
+      if (system.includes("Abenteuer-Architekt")) return fakePlanJson;
+      const last = messages[messages.length - 1];
+      if (last?.role === "user" && last.content.toLowerCase().includes("kampf")) {
+        return '{"narration":"Kampf!","diceRequest":null,"combat":{"event":"start","target":null,"amount":null,"enemies":[{"name":"Goblin","count":1,"hp":7}]}}';
+      }
+      return '{"narration":"…","diceRequest":null,"combat":null}';
+    };
+    const store = new CampaignStore(openDb(":memory:"));
+    const app = buildServer(combatCall, store);
+    const created = await createCampaign(app);
+    const id = created.campaign.id;
+    await app.inject({ method: "POST", url: `/api/campaigns/${id}/characters`, payload: { name: "Ohne HP", concept: "Späher" } });
+    await app.inject({ method: "POST", url: `/api/campaigns/${id}/action`, payload: { text: "Kampf" } });
+    const state0 = (await app.inject({ method: "GET", url: `/api/campaigns/${id}/state` })).json();
+    const ids = state0.combat.combatants.map((c: { id: string }) => c.id);
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/campaigns/${id}/combat/initiative`,
+      payload: { values: ids.map((cid: string) => ({ id: cid, value: 10 })) },
+    });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
 });
 
 describe("turn audio endpoint", () => {
