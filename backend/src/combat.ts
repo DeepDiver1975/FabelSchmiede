@@ -62,3 +62,36 @@ export function applyCombatEvent(
   });
   return { ...state, combatants };
 }
+
+// Assign entered initiative values (by combatant id), sort highest-first, and
+// begin the turn sequence at the top of the order.
+export function submitInitiative(
+  state: CombatState,
+  values: { id: string; value: number }[],
+): CombatState {
+  const byId = new Map(values.map((v) => [v.id, v.value]));
+  const combatants = state.combatants
+    .map((c) => (byId.has(c.id) ? { ...c, initiative: byId.get(c.id)! } : c))
+    .slice()
+    .sort((a, b) => (b.initiative ?? 0) - (a.initiative ?? 0));
+  return { ...state, combatants, phase: "in-turns", turnIndex: 0 };
+}
+
+// Advance to the next non-defeated combatant, wrapping around the order. If
+// every combatant is defeated, the index simply wraps (combat should end via an
+// "end" event in that case).
+export function advanceTurn(state: CombatState): CombatState {
+  const n = state.combatants.length;
+  if (n === 0) return state;
+  for (let step = 1; step <= n; step++) {
+    const idx = (state.turnIndex + step) % n;
+    if (!state.combatants[idx].defeated) return { ...state, turnIndex: idx };
+  }
+  return { ...state, turnIndex: (state.turnIndex + 1) % n };
+}
+
+// Whose turn is it? Null until initiative has been rolled (turns phase).
+export function currentCombatant(state: CombatState): Combatant | null {
+  if (state.phase !== "in-turns") return null;
+  return state.combatants[state.turnIndex] ?? null;
+}

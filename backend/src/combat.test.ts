@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { applyCombatEvent } from "./combat.js";
+import { applyCombatEvent, submitInitiative, advanceTurn, currentCombatant } from "./combat.js";
 import type { CombatState, PcSeed } from "./types.js";
 
 const pcs: PcSeed[] = [
@@ -74,5 +74,52 @@ describe("applyCombatEvent — hp events", () => {
 
   it("hp events on null state are a no-op returning null", () => {
     expect(applyCombatEvent(null, { event: "damage", target: "x", amount: 1 }, pcs)).toBeNull();
+  });
+});
+
+function rolled(): CombatState {
+  const s = applyCombatEvent(null, { event: "start", enemies: [{ name: "Goblin", count: 2, hp: 7 }] }, pcs)!;
+  // Thalia(pc-1) Bragok(pc-2) Goblin 1(goblin-1) Goblin 2(goblin-2)
+  return submitInitiative(s, [
+    { id: "pc-1", value: 18 },
+    { id: "pc-2", value: 9 },
+    { id: "goblin-1", value: 12 },
+    { id: "goblin-2", value: 15 },
+  ]);
+}
+
+describe("submitInitiative", () => {
+  it("assigns values, sorts descending, and enters the turns phase", () => {
+    const s = rolled();
+    expect(s.phase).toBe("in-turns");
+    expect(s.turnIndex).toBe(0);
+    expect(s.combatants.map((c) => c.name)).toEqual(["Thalia", "Goblin 2", "Goblin 1", "Bragok"]);
+    expect(currentCombatant(s)!.name).toBe("Thalia");
+  });
+});
+
+describe("advanceTurn", () => {
+  it("moves to the next combatant and wraps around", () => {
+    let s = rolled(); // order: Thalia, Goblin 2, Goblin 1, Bragok
+    s = advanceTurn(s);
+    expect(currentCombatant(s)!.name).toBe("Goblin 2");
+    s = advanceTurn(advanceTurn(s)); // -> Goblin 1 -> Bragok
+    expect(currentCombatant(s)!.name).toBe("Bragok");
+    s = advanceTurn(s); // wraps
+    expect(currentCombatant(s)!.name).toBe("Thalia");
+  });
+
+  it("skips defeated combatants", () => {
+    let s = rolled(); // Thalia, Goblin 2, Goblin 1, Bragok
+    s = applyCombatEvent(s, { event: "defeat", target: "Goblin 2" }, pcs)!;
+    s = advanceTurn(s); // from Thalia, skip Goblin 2 -> Goblin 1
+    expect(currentCombatant(s)!.name).toBe("Goblin 1");
+  });
+});
+
+describe("currentCombatant", () => {
+  it("returns null while still rolling initiative", () => {
+    const s = applyCombatEvent(null, { event: "start", enemies: [{ name: "Ork", count: 1, hp: 9 }] }, pcs)!;
+    expect(currentCombatant(s)).toBeNull();
   });
 });
