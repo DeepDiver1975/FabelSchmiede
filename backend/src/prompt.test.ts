@@ -37,6 +37,13 @@ describe("buildSystemPrompt", () => {
     // A fresh campaign with no prior opening must not leave a dangling heading.
     expect(buildSystemPrompt("Goblins im Nebelwald")).not.toContain("BISHERIGER VERLAUF");
   });
+
+  it("includes the narrative-restraint and storytelling-style rules", () => {
+    const p = buildSystemPrompt("Goblins im Nebelwald");
+    expect(p).toContain("SPIELERKONTROLLE");
+    expect(p).toContain("SIMULATION VOR DRAMA");
+    expect(p).toContain("ERZÄHLSTIL");
+  });
 });
 
 describe("buildOpeningSystemPrompt", () => {
@@ -44,6 +51,12 @@ describe("buildOpeningSystemPrompt", () => {
     const p = buildOpeningSystemPrompt("Ein Raumhafen auf dem Mars");
     expect(p).toContain("Eröffnungsszene");
     expect(p).toContain("Ein Raumhafen auf dem Mars");
+  });
+
+  it("includes the narrative-restraint and storytelling-style rules", () => {
+    const p = buildOpeningSystemPrompt("Ein Raumhafen auf dem Mars");
+    expect(p).toContain("SPIELERKONTROLLE");
+    expect(p).toContain("ERZÄHLSTIL");
   });
 });
 
@@ -104,6 +117,12 @@ describe("buildAsideSystemPrompt", () => {
     const asidePrompt = buildAsideSystemPrompt("Goblins im Nebelwald");
     expect(asidePrompt).not.toBe(storyPrompt);
     expect(asidePrompt.toLowerCase()).toContain("immer auf null");
+  });
+
+  it("includes the storytelling-style rules but not the narrative-restraint rules", () => {
+    const p = buildAsideSystemPrompt("Goblins im Nebelwald");
+    expect(p).toContain("ERZÄHLSTIL");
+    expect(p).not.toContain("SPIELERKONTROLLE");
   });
 });
 

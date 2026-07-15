@@ -6,4 +6,8 @@ describe("scene", () => {
     expect(SCENE_BRIEF.length).toBeGreaterThan(80);
     expect(SCENE_BRIEF).toContain("Deutsch");
   });
+
+  it("no longer pushes the GM to proactively drive the plot forward", () => {
+    expect(SCENE_BRIEF).not.toContain("Handlung in Bewegung");
+  });
 });
