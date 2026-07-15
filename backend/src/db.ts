@@ -54,6 +54,7 @@ export function migrate(db: Database.Database): void {
       name TEXT NOT NULL,
       concept TEXT NOT NULL,
       level INTEGER,
+      max_hp INTEGER,
       -- Nested, variable-shape detail (narrative flavour, abilities, resource
       -- pools) is stored as JSON: it is only ever read/written whole, so a
       -- normalized schema would buy nothing here.
@@ -76,6 +77,16 @@ export function migrate(db: Database.Database): void {
     ).n > 0;
   if (!hasKindColumn) {
     db.exec(`ALTER TABLE turns ADD COLUMN kind TEXT NOT NULL DEFAULT 'story'`);
+  }
+
+  const hasMaxHpColumn =
+    (
+      db.prepare("SELECT COUNT(*) AS n FROM pragma_table_info('characters') WHERE name = 'max_hp'").get() as {
+        n: number;
+      }
+    ).n > 0;
+  if (!hasMaxHpColumn) {
+    db.exec(`ALTER TABLE characters ADD COLUMN max_hp INTEGER`);
   }
 }
 

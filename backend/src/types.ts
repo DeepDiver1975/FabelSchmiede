@@ -103,6 +103,9 @@ export type Character = {
   concept: string;
   // Optional mechanical detail. Absent fields simply mean "not tracked yet".
   level?: number;
+  // Maximum hit points. Slice-1 combat tracking uses this to seed a PC's HP.
+  // Not a full sheet — a single forward-compatible number.
+  maxHp?: number;
   narrative?: CharacterNarrative;
   abilities?: Ability[];
   resources?: ResourcePool[];
@@ -115,6 +118,7 @@ export type CharacterInput = {
   name: string;
   concept: string;
   level?: number;
+  maxHp?: number;
   narrative?: CharacterNarrative;
   abilities?: Ability[];
   resources?: ResourcePool[];

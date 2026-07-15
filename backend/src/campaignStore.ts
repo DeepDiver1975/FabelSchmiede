@@ -185,8 +185,8 @@ export class CampaignStore {
     this.db
       .prepare(
         `INSERT INTO characters
-           (id, campaign_id, name, concept, level, narrative, abilities, resources, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (id, campaign_id, name, concept, level, max_hp, narrative, abilities, resources, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -194,6 +194,7 @@ export class CampaignStore {
         input.name,
         input.concept,
         input.level ?? null,
+        input.maxHp ?? null,
         input.narrative ? JSON.stringify(input.narrative) : null,
         input.abilities ? JSON.stringify(input.abilities) : null,
         input.resources ? JSON.stringify(input.resources) : null,
@@ -205,6 +206,7 @@ export class CampaignStore {
       name: input.name,
       concept: input.concept,
       ...(input.level !== undefined ? { level: input.level } : {}),
+      ...(input.maxHp !== undefined ? { maxHp: input.maxHp } : {}),
       ...(input.narrative ? { narrative: input.narrative } : {}),
       ...(input.abilities ? { abilities: input.abilities } : {}),
       ...(input.resources ? { resources: input.resources } : {}),
@@ -231,13 +233,14 @@ export class CampaignStore {
     this.db
       .prepare(
         `UPDATE characters
-            SET name = ?, concept = ?, level = ?, narrative = ?, abilities = ?, resources = ?
+            SET name = ?, concept = ?, level = ?, max_hp = ?, narrative = ?, abilities = ?, resources = ?
           WHERE id = ?`,
       )
       .run(
         character.name,
         character.concept,
         character.level ?? null,
+        character.maxHp ?? null,
         character.narrative ? JSON.stringify(character.narrative) : null,
         character.abilities ? JSON.stringify(character.abilities) : null,
         character.resources ? JSON.stringify(character.resources) : null,
@@ -256,6 +259,7 @@ type CharacterRow = {
   name: string;
   concept: string;
   level: number | null;
+  max_hp: number | null;
   narrative: string | null;
   abilities: string | null;
   resources: string | null;
@@ -269,6 +273,7 @@ function rowToCharacter(row: CharacterRow): Character {
     name: row.name,
     concept: row.concept,
     ...(row.level !== null ? { level: row.level } : {}),
+    ...(row.max_hp !== null ? { maxHp: row.max_hp } : {}),
     ...(row.narrative ? { narrative: JSON.parse(row.narrative) as CharacterNarrative } : {}),
     ...(row.abilities ? { abilities: JSON.parse(row.abilities) as Ability[] } : {}),
     ...(row.resources ? { resources: JSON.parse(row.resources) as ResourcePool[] } : {}),

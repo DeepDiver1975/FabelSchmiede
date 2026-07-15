@@ -187,6 +187,16 @@ describe("CampaignStore", () => {
     expect(store.getCharacter(b.id)).not.toBeNull();
     expect(store.listCharacters(c.id).map((ch) => ch.name)).toEqual(["Zweite"]);
   });
+
+  it("round-trips a character's maxHp", () => {
+    const store = new CampaignStore(openDb(":memory:"));
+    const c = store.createCampaign("K", "P");
+    const created = store.createCharacter(c.id, { name: "Thalia", concept: "Magierin", maxHp: 12 });
+    expect(created.maxHp).toBe(12);
+    expect(store.getCharacter(created.id)!.maxHp).toBe(12);
+    store.updateCharacter({ ...created, maxHp: 20 });
+    expect(store.getCharacter(created.id)!.maxHp).toBe(20);
+  });
 });
 
 import type { CampaignPlan } from "./types.js";

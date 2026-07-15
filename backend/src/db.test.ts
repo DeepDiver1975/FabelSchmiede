@@ -59,4 +59,13 @@ describe("db", () => {
     expect(count).toBe(1);
     db.close();
   });
+
+  it("gives characters a max_hp column", () => {
+    const db = openDb(":memory:");
+    const cols = (db.prepare("SELECT name FROM pragma_table_info('characters')").all() as { name: string }[]).map(
+      (r) => r.name,
+    );
+    expect(cols).toContain("max_hp");
+    db.close();
+  });
 });
