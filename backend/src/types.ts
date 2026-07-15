@@ -120,6 +120,40 @@ export type CharacterInput = {
   resources?: ResourcePool[];
 };
 
+// --- Combat ---------------------------------------------------------------
+
+export type CombatPhase = "rolling-initiative" | "in-turns";
+
+export type Combatant = {
+  id: string;
+  name: string;
+  side: "pc" | "enemy";
+  maxHp: number;
+  hp: number;
+  initiative: number | null;
+  defeated: boolean;
+};
+
+export type CombatState = {
+  active: boolean;
+  phase: CombatPhase;
+  combatants: Combatant[];
+  turnIndex: number;
+};
+
+export type CombatEvent =
+  | { event: "start"; enemies: { name: string; count: number; hp: number }[] }
+  | { event: "damage"; target: string; amount: number }
+  | { event: "heal"; target: string; amount: number }
+  | { event: "defeat"; target: string }
+  | { event: "end" };
+
+export type PcSeed = {
+  id: string;
+  name: string;
+  maxHp: number;
+};
+
 // JSON Schema for Bedrock structured output (output_config.format).
 // Note: string minLength/maxLength are NOT supported by structured outputs — omit them.
 export const GM_REPLY_SCHEMA = {
