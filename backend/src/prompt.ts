@@ -72,6 +72,10 @@ KAMPF-BEGINN (SEHR WICHTIG):
 - Läuft bereits ein Kampf (Abschnitt "KAMPF LÄUFT" oben), starte KEINEN neuen —
   nutze stattdessen die dortigen Ereignisse (damage/heal/defeat/end).
 - In allen anderen Fällen (kein Kampf) setze "combat" auf null.
+
+BEISPIEL für den Beginn eines Kampfes — antworte GENAU in dieser Form (nur das
+JSON-Objekt, kein weiterer Text davor oder danach):
+{"narration":"Aus dem Unterholz brechen drei Goblins hervor, die rostigen Klingen gezückt, und ein hünenhafter Hobgoblin folgt ihnen mit einem heiseren Kriegsschrei.","diceRequest":null,"combat":{"event":"start","enemies":[{"name":"Goblin","count":3,"hp":7},{"name":"Hobgoblin","count":1,"hp":11}]}}
 `.trim();
 
 // The opening narration is a gm turn and is dropped from the message list

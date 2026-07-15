@@ -48,6 +48,20 @@ describe("buildSystemPrompt", () => {
     expect(p).toContain("Initiative"); // app collects it; GM sets diceRequest null
     expect(p).toContain("combat"); // combat field named in the response format
   });
+
+  it("includes a one-shot example of a valid combat-start reply", () => {
+    // Smaller/local models (NIM) copy the exact envelope shape from an example
+    // far more reliably than from prose. The example must be a complete, valid
+    // GM reply (narration + diceRequest null + combat start) that parses.
+    const p = buildSystemPrompt("Goblins im Nebelwald");
+    expect(p).toContain("BEISPIEL");
+    const match = p.match(/\{"narration":.*"event":"start".*\}\}/);
+    expect(match).not.toBeNull();
+    const parsed = JSON.parse(match![0]);
+    expect(parsed.diceRequest).toBeNull();
+    expect(parsed.combat.event).toBe("start");
+    expect(Array.isArray(parsed.combat.enemies)).toBe(true);
+  });
 });
 
 describe("buildOpeningSystemPrompt", () => {
