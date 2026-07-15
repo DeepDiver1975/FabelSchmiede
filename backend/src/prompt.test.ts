@@ -189,3 +189,30 @@ describe("renderPlan / plan in prompts", () => {
     expect(buildOpeningSystemPrompt("Prämisse", undefined, samplePlan)).toContain("GEHEIM_ARC");
   });
 });
+
+import { renderCombat } from "./prompt.js";
+import type { CombatState } from "./types.js";
+
+describe("renderCombat", () => {
+  const state: CombatState = {
+    active: true,
+    phase: "in-turns",
+    combatants: [
+      { id: "pc-1", name: "Thalia", side: "pc", maxHp: 12, hp: 7, initiative: 18, defeated: false },
+      { id: "goblin-1", name: "Goblin 1", side: "enemy", maxHp: 7, hp: 0, initiative: 12, defeated: true },
+    ],
+    turnIndex: 0,
+  };
+
+  it("returns empty string when no combat", () => {
+    expect(renderCombat(null)).toBe("");
+  });
+
+  it("lists combatants with hp and marks the current turn", () => {
+    const out = renderCombat(state);
+    expect(out).toContain("Thalia");
+    expect(out).toContain("7/12");
+    expect(out).toContain("besiegt");
+    expect(out).toContain("AM ZUG: Thalia");
+  });
+});

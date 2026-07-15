@@ -9,7 +9,7 @@ import { buildCampaignPlanSystemPrompt } from "./campaignPlanPrompt.js";
 import { parseGmReply } from "./parseReply.js";
 import { parsePlan } from "./parsePlan.js";
 import { GM_REPLY_SCHEMA, CAMPAIGN_PLAN_SCHEMA } from "./types.js";
-import type { Character, CampaignPlan, GmReply, StoredTurn, Turn } from "./types.js";
+import type { Character, CampaignPlan, CombatState, GmReply, StoredTurn, Turn } from "./types.js";
 
 export type LlmCaller = (args: {
   system: string;
@@ -54,12 +54,13 @@ export async function generateGmReply(
   call: LlmCaller,
   characters: Character[] = [],
   plan?: CampaignPlan,
+  combat?: CombatState,
 ): Promise<GmReply> {
   // The opening narration (first gm turn) is dropped from the message list by
   // historyToMessages, so fold its canonical facts into the system prompt.
   const opening = history[0]?.role === "gm" ? history[0].text : undefined;
   return callWithRetry(
-    buildSystemPrompt(premise, opening, characters, plan),
+    buildSystemPrompt(premise, opening, characters, plan, combat),
     historyToMessages(history),
     call,
   );

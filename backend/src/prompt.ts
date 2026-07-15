@@ -1,6 +1,7 @@
 import { SCENE_BRIEF } from "./scene.js";
 import { renderParty } from "./partyPrompt.js";
-import type { Character, CampaignPlan, Turn } from "./types.js";
+import { currentCombatant } from "./combat.js";
+import type { Character, CampaignPlan, CombatState, Turn } from "./types.js";
 
 const CONTINUITY_RULES = `
 KONSISTENZ (SEHR WICHTIG):
@@ -110,11 +111,45 @@ function planSection(plan: CampaignPlan | undefined): string {
   return rendered ? `\n\n${rendered}` : "";
 }
 
+// Combat is code-owned, mutable state (unlike the frozen plan). Re-inject the
+// current picture every turn so the model narrates against real HP and the real
+// turn order — and never invents them.
+export function renderCombat(state: CombatState | null): string {
+  if (!state || !state.active) return "";
+  const lines = state.combatants
+    .map((c) => {
+      const side = c.side === "pc" ? "Gruppe" : "Gegner";
+      const status = c.defeated ? "besiegt" : `${c.hp}/${c.maxHp} TP`;
+      const init = c.initiative === null ? "—" : String(c.initiative);
+      return `- ${c.name} (${side}): ${status}, Initiative ${init}`;
+    })
+    .join("\n");
+  const current = currentCombatant(state);
+  const turnLine =
+    state.phase === "in-turns" && current
+      ? `\nAM ZUG: ${current.name}`
+      : "\n(Die Initiative wird gerade ausgewürfelt.)";
+  return `
+KAMPF LÄUFT (verbindlicher Zustand — der Code führt Buch, nicht du):
+${lines}${turnLine}
+
+Erfinde keine Trefferpunkte und keine Reihenfolge. Wenn eine Handlung Schaden
+verursacht, Heilung bewirkt oder einen Gegner ausschaltet, gib dies über das
+Feld "combat" als Ereignis an (damage/heal/defeat). Endet der Kampf, sende das
+Ereignis "end".`.trim();
+}
+
+function combatSection(state: CombatState | undefined): string {
+  const rendered = renderCombat(state ?? null);
+  return rendered ? `\n\n${rendered}` : "";
+}
+
 export function buildSystemPrompt(
   premise: string,
   opening?: string,
   party?: Character[],
   plan?: CampaignPlan,
+  combat?: CombatState,
 ): string {
   return `
 Du bist der Spielleiter (Game Master).
@@ -122,7 +157,7 @@ Du bist der Spielleiter (Game Master).
 ${SCENE_BRIEF}
 
 SZENE DIESER KAMPAGNE:
-${premise}${openingSection(opening)}${partySection(party)}${planSection(plan)}
+${premise}${openingSection(opening)}${partySection(party)}${planSection(plan)}${combatSection(combat)}
 
 ${CONTINUITY_RULES}
 
