@@ -645,6 +645,30 @@ describe("server", () => {
     expect(res.statusCode).toBe(400);
     await app.close();
   });
+
+  it("sets turnPhase acted when a combat turn resolves without a roll", async () => {
+    const combatCall: LlmCaller = async ({ system, messages }) => {
+      if (system.includes("Abenteuer-Architekt")) return fakePlanJson;
+      const last = messages[messages.length - 1];
+      if (last?.role === "user" && last.content.toLowerCase().includes("kampf beginnt")) {
+        return '{"narration":"Kampf!","diceRequest":null,"combat":{"event":"start","target":null,"amount":null,"enemies":[{"name":"Goblin","count":1,"hp":7}]}}';
+      }
+      return '{"narration":"Erledigt.","diceRequest":null,"combat":null}';
+    };
+    const store = new CampaignStore(openDb(":memory:"));
+    const app = buildServer(combatCall, store);
+    const created = await createCampaignShell(app);
+    const id = created.campaign.id;
+    await app.inject({ method: "POST", url: `/api/campaigns/${id}/characters`, payload: { name: "Thalia", concept: "Magierin", maxHp: 12 } });
+    await app.inject({ method: "POST", url: `/api/campaigns/${id}/action`, payload: { text: "Kampf beginnt" } });
+    const s0 = (await app.inject({ method: "GET", url: `/api/campaigns/${id}/state` })).json();
+    const ids = s0.combat.combatants.map((c: { id: string }) => c.id);
+    await app.inject({ method: "POST", url: `/api/campaigns/${id}/combat/initiative`, payload: { values: ids.map((cid: string) => ({ id: cid, value: 10 })) } });
+    // a free-text action during in-turns resolves the current turn (no dice) → acted
+    const res = await app.inject({ method: "POST", url: `/api/campaigns/${id}/action`, payload: { text: "Ich weiche aus" } });
+    expect(res.json().combat.turnPhase).toBe("acted");
+    await app.close();
+  });
 });
 
 describe("turn audio endpoint", () => {

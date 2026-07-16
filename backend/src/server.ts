@@ -97,6 +97,14 @@ export function buildServer(
       if (next) store.saveCombat(id, next);
       else store.clearCombat(id);
     }
+    // During the turns phase, every non-aside GM reply resolves a combatant's
+    // turn: still "ready" if a roll is pending, otherwise the turn is done.
+    if (kind !== "aside") {
+      const c = store.getCombat(id);
+      if (c && c.active && c.phase === "in-turns") {
+        store.saveCombat(id, { ...c, turnPhase: gm.diceRequest ? "ready" : "acted" });
+      }
+    }
     return stateOf(id);
   }
 
