@@ -232,3 +232,10 @@ button:disabled { opacity: 0.5; cursor: default; }
 .setup-hint { opacity: 0.8; font-size: 0.92rem; margin: 0.5rem 0; }
 .begin-adventure { margin-top: 0.75rem; font-size: 1.05rem; padding: 0.6rem 1.1rem; }
 .begin-adventure:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.combat-turn-actions { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem; }
+.combat-action-buttons { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+.combat-action-buttons button.active { background: var(--ember); color: #fff; }
+.combat-order-row.targetable { cursor: pointer; outline: 1px dashed var(--border); }
+.combat-order-row.picked-target { outline: 2px solid var(--ember); }
+.combat-detail { display: block; margin-top: 0.25rem; width: 100%; }

@@ -4,6 +4,7 @@ import {
   type State,
   type CharacterInput,
   type CombatState,
+  type DiceRequest,
 } from "./api.js";
 import { PartyPanel } from "./PartyPanel.js";
 import { splitParagraphs } from "./prose.js";
@@ -44,35 +45,51 @@ function pendingTurnText(t: PendingTurn): string {
 function CombatPanel({
   combat,
   busy,
+  pending,
   onSubmitInitiative,
+  onAction,
+  onPlayEnemy,
   onAdvance,
   onEnd,
 }: {
   combat: CombatState;
   busy: boolean;
+  pending: DiceRequest | null;
   onSubmitInitiative: (values: { id: string; value: number }[]) => void;
+  onAction: (body: { actionType: string; targetId?: string; detail?: string }) => void;
+  onPlayEnemy: () => void;
   onAdvance: () => void;
   onEnd: () => void;
 }) {
   const [rolls, setRolls] = useState<Record<string, string>>({});
+  const [picked, setPicked] = useState<string | null>(null); // chosen actionType
+  const [targetId, setTargetId] = useState<string | null>(null);
+  const [detail, setDetail] = useState("");
   const rolling = combat.phase === "rolling-initiative";
   const allFilled = combat.combatants.every((c) => {
     const v = rolls[c.id];
     return v !== undefined && v.trim() !== "" && Number.isFinite(Number(v));
   });
+  const current = combat.combatants[combat.turnIndex];
+  const acted = combat.turnPhase === "acted";
+  const NEEDS_TARGET = new Set(["angriff", "faehigkeit", "anderes"]);
 
-  function submit() {
-    const values = combat.combatants.map((c) => ({ id: c.id, value: Number(rolls[c.id]) }));
-    onSubmitInitiative(values);
+  function sendAction() {
+    if (!picked) return;
+    const body: { actionType: string; targetId?: string; detail?: string } = { actionType: picked };
+    if (targetId) body.targetId = targetId;
+    if (detail.trim()) body.detail = detail.trim();
+    onAction(body);
+    setPicked(null);
+    setTargetId(null);
+    setDetail("");
   }
 
   return (
     <section className="combat-panel">
       <h2>
         ⚔️ Kampf
-        {combat.phase === "in-turns" &&
-          combat.combatants[combat.turnIndex] &&
-          ` — Am Zug: ${combat.combatants[combat.turnIndex].name}`}
+        {combat.phase === "in-turns" && current && ` — Am Zug: ${current.name}`}
       </h2>
       {rolling ? (
         <>
@@ -91,7 +108,12 @@ function CombatPanel({
               </li>
             ))}
           </ul>
-          <button onClick={submit} disabled={busy || !allFilled}>Alle senden</button>
+          <button
+            onClick={() => onSubmitInitiative(combat.combatants.map((c) => ({ id: c.id, value: Number(rolls[c.id]) })))}
+            disabled={busy || !allFilled}
+          >
+            Alle senden
+          </button>
         </>
       ) : (
         <>
@@ -99,7 +121,10 @@ function CombatPanel({
             {combat.combatants.map((c, i) => (
               <li
                 key={c.id}
-                className={`combat-order-row ${c.side}${c.defeated ? " defeated" : ""}${i === combat.turnIndex ? " current" : ""}`}
+                className={`combat-order-row ${c.side}${c.defeated ? " defeated" : ""}${i === combat.turnIndex ? " current" : ""}${picked && NEEDS_TARGET.has(picked) && !acted && !pending ? " targetable" : ""}${targetId === c.id ? " picked-target" : ""}`}
+                onClick={() => {
+                  if (picked && NEEDS_TARGET.has(picked) && !acted && !pending && !c.defeated) setTargetId(c.id);
+                }}
               >
                 <span className="combat-init">{c.initiative ?? "—"}</span>
                 <span className="combat-name">{c.name}</span>
@@ -107,10 +132,63 @@ function CombatPanel({
               </li>
             ))}
           </ol>
-          <div className="combat-actions">
-            <button onClick={onAdvance} disabled={busy}>Zug beenden</button>
-            <button onClick={onEnd} disabled={busy}>Kampf beenden</button>
-          </div>
+
+          {/* The turn UI is derived: a pending roll wins; else the current
+              combatant's side + turnPhase decide what to show. */}
+          {pending ? (
+            <p className="combat-hint">Wurf nötig — Ergebnis unten eingeben.</p>
+          ) : acted ? (
+            <div className="combat-actions">
+              <button onClick={onAdvance} disabled={busy}>▶ Nächster Zug</button>
+              <button onClick={onEnd} disabled={busy}>Kampf beenden</button>
+            </div>
+          ) : current && current.side === "enemy" ? (
+            <div className="combat-actions">
+              <button onClick={onPlayEnemy} disabled={busy}>▶ {current.name} spielen</button>
+              <button onClick={onEnd} disabled={busy}>Kampf beenden</button>
+            </div>
+          ) : (
+            <div className="combat-turn-actions">
+              <div className="combat-action-buttons">
+                {[
+                  ["angriff", "Angriff"],
+                  ["faehigkeit", "Fähigkeit"],
+                  ["bewegung", "Bewegung"],
+                  ["ausweichen", "Ausweichen"],
+                  ["anderes", "Anderes"],
+                ].map(([type, label]) => (
+                  <button
+                    key={type}
+                    className={picked === type ? "active" : ""}
+                    onClick={() => { setPicked(type); setTargetId(null); }}
+                    disabled={busy}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {picked && NEEDS_TARGET.has(picked) && (
+                <p className="combat-hint">
+                  {picked === "angriff" ? "Ziel in der Liste antippen." : "Optional ein Ziel antippen."}
+                  {picked !== "angriff" && (
+                    <input
+                      className="combat-detail"
+                      value={detail}
+                      onChange={(e) => setDetail(e.target.value)}
+                      placeholder="Was genau? (z. B. Feuerball)"
+                      disabled={busy}
+                    />
+                  )}
+                </p>
+              )}
+              <button
+                onClick={sendAction}
+                disabled={busy || !picked || (picked === "angriff" && !targetId)}
+              >
+                Handeln
+              </button>
+            </div>
+          )}
         </>
       )}
     </section>
@@ -239,6 +317,28 @@ export function PlayView({
     setError(null);
     try {
       setState(await api.endCombat(id));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function combatAction(body: { actionType: string; targetId?: string; detail?: string }) {
+    setBusy(true);
+    setError(null);
+    try {
+      setState(await api.combatAction(id, body));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function playEnemy() {
+    setBusy(true);
+    setError(null);
+    try {
+      setState(await api.playEnemy(id));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -415,6 +515,27 @@ export function PlayView({
           />
           <button onClick={submitRoll} disabled={busy}>Ergebnis senden</button>
         </section>
+      ) : state.combat?.active && state.combat.phase === "in-turns" ? (
+        <section className="action">
+          <button
+            type="button"
+            className={`aside-toggle${asideMode ? " active" : ""}`}
+            onClick={() => setAsideMode((a) => !a)}
+            disabled={busy}
+            title="Nachfragen, ohne die Geschichte fortzusetzen"
+          >
+            ❓
+          </button>
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && submitAction()}
+            placeholder="Übrigens, frag nach etwas zur Spielwelt…"
+            disabled={busy || !asideMode}
+            autoFocus
+          />
+          <button onClick={submitAction} disabled={busy || !asideMode}>Fragen</button>
+        </section>
       ) : (
         <section className="action">
           <button
@@ -444,7 +565,10 @@ export function PlayView({
           <CombatPanel
             combat={state.combat}
             busy={busy}
+            pending={pending}
             onSubmitInitiative={submitInitiative}
+            onAction={combatAction}
+            onPlayEnemy={playEnemy}
             onAdvance={advanceTurn}
             onEnd={endCombat}
           />
