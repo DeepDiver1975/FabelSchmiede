@@ -78,6 +78,23 @@ JSON-Objekt, kein weiterer Text davor oder danach):
 {"narration":"Aus dem Unterholz brechen drei Goblins hervor, die rostigen Klingen gezückt, und ein hünenhafter Hobgoblin folgt ihnen mit einem heiseren Kriegsschrei.","diceRequest":null,"combat":{"event":"start","enemies":[{"name":"Goblin","count":3,"hp":7},{"name":"Hobgoblin","count":1,"hp":11}]}}
 `.trim();
 
+// How the GM plays a SINGLE combat turn once the fight is underway. The app
+// drives the turn loop and asks the GM to resolve exactly one combatant's turn;
+// these rules keep that turn discrete and keep HP in sync.
+const COMBAT_TURN_RULES = `
+KAMPF-ZUG (nur während eines laufenden Kampfes):
+- Löse GENAU den einen Zug auf, um den du gebeten wirst — nicht mehr.
+- Fordere höchstens EINEN Wurf an ("diceRequest") und HALTE DANN AN. Ist kein
+  (weiterer) Wurf nötig, schließe den Zug ab.
+- Erzähle NICHT über diesen Zug hinaus und stelle KEINE offene Frage wie
+  "Was tut ihr?".
+- Wenn ein Angriff trifft, gib IMMER ein Ereignis {event:"damage", target, amount}
+  im Feld "combat" an. Bei Heilung {event:"heal", ...}, beim Ausschalten
+  {event:"defeat", target}.
+- Wirst du zum Abschluss des Kampfes aufgefordert (alle Gegner besiegt oder die
+  Gruppe besiegt), beschreibe kurz den Ausgang und sende {event:"end"}.
+`.trim();
+
 // The opening narration is a gm turn and is dropped from the message list
 // (the Messages API requires a leading user message). But it is where the GM
 // first establishes canonical facts — place names, NPC names, enemy counts —
@@ -188,6 +205,8 @@ ${premise}${openingSection(opening)}${partySection(party)}${planSection(plan)}${
 ${CONTINUITY_RULES}
 
 ${COMBAT_START_RULES}
+
+${COMBAT_TURN_RULES}
 
 ${DICE_AND_FORMAT_RULES}
 `.trim();

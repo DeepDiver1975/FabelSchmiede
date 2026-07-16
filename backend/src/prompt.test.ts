@@ -62,6 +62,17 @@ describe("buildSystemPrompt", () => {
     expect(parsed.combat.event).toBe("start");
     expect(Array.isArray(parsed.combat.enemies)).toBe(true);
   });
+
+  it("includes the combat-turn rule (resolve one turn, one roll, damage event, end)", () => {
+    const p = buildSystemPrompt("Goblins im Nebelwald");
+    expect(p).toContain("KAMPF-ZUG");
+    expect(p).toContain("höchstens EINEN Wurf");
+    expect(p).toContain('{event:"damage"');
+    expect(p).toContain('{event:"end"}');
+  });
+  it("keeps the combat-turn rule out of the aside prompt", () => {
+    expect(buildAsideSystemPrompt("Goblins im Nebelwald")).not.toContain("KAMPF-ZUG");
+  });
 });
 
 describe("buildOpeningSystemPrompt", () => {
