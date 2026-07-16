@@ -9,7 +9,7 @@ import {
   generatePlan,
   type LlmCaller,
 } from "./gmEngine.js";
-import { applyCombatEvent, submitInitiative, advanceTurn } from "./combat.js";
+import { applyCombatEvent, submitInitiative, advanceTurn, currentCombatant, describeCombatAction, describeEnemyTurn } from "./combat.js";
 import { toBrief } from "./campaignPlan.js";
 import { createBedrockCaller } from "./bedrockCaller.js";
 import { createAnthropicCaller } from "./anthropicCaller.js";
@@ -293,6 +293,30 @@ export function buildServer(
     store.clearCombat(req.params.id);
     return stateOf(req.params.id);
   });
+
+  app.post<{ Params: { id: string }; Body: { actionType: string; targetId?: string; detail?: string } }>(
+    "/api/campaigns/:id/combat/action",
+    async (req, reply) => {
+      const campaign = store.getCampaign(req.params.id);
+      if (!campaign) return reply.code(404).send({ error: "Kampagne nicht gefunden." });
+      const combat = store.getCombat(req.params.id);
+      if (!combat || combat.phase !== "in-turns")
+        return reply.code(409).send({ error: "Es läuft gerade kein Kampf mit Zugreihenfolge." });
+      const current = currentCombatant(combat);
+      if (!current || current.side !== "pc" || combat.turnPhase === "acted")
+        return reply.code(409).send({ error: "Es ist gerade kein Spielercharakter am Zug." });
+      const target = req.body?.targetId
+        ? combat.combatants.find((c) => c.id === req.body.targetId) ?? null
+        : null;
+      const text = describeCombatAction(
+        current.name,
+        req.body?.actionType ?? "anderes",
+        target?.name ?? null,
+        req.body?.detail ?? null,
+      );
+      return play(req.params.id, text, "story", reply);
+    },
+  );
 
   app.post<{ Params: { id: string } }>("/api/campaigns/:id/finish", async (req, reply) => {
     const campaign = store.getCampaign(req.params.id);

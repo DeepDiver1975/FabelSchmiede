@@ -763,4 +763,63 @@ describe("turn audio endpoint", () => {
     expect(state.characters.find((x: { id: string }) => x.id === c.id).maxHp).toBe(15);
     await app.close();
   });
+
+  it("plays a PC combat turn via /combat/action (attack requests a roll)", async () => {
+    const combatCall: LlmCaller = async ({ system, messages }) => {
+      if (system.includes("Abenteuer-Architekt")) return fakePlanJson;
+      const last = messages[messages.length - 1];
+      if (last?.role === "user" && last.content.toLowerCase().includes("kampf beginnt")) {
+        return '{"narration":"Kampf!","diceRequest":null,"combat":{"event":"start","target":null,"amount":null,"enemies":[{"name":"Goblin","count":1,"hp":7}]}}';
+      }
+      if (last?.role === "user" && last.content.includes("Angriff")) {
+        return '{"narration":"Thalia holt aus.","diceRequest":{"reason":"Angriff","hint":"W20"},"combat":null}';
+      }
+      return '{"narration":"…","diceRequest":null,"combat":null}';
+    };
+    const store = new CampaignStore(openDb(":memory:"));
+    const app = buildServer(combatCall, store);
+    const created = await createCampaignShell(app);
+    const id = created.campaign.id;
+    await app.inject({ method: "POST", url: `/api/campaigns/${id}/characters`, payload: { name: "Thalia", concept: "Magierin", maxHp: 12 } });
+    await app.inject({ method: "POST", url: `/api/campaigns/${id}/action`, payload: { text: "Kampf beginnt" } });
+    const s0 = (await app.inject({ method: "GET", url: `/api/campaigns/${id}/state` })).json();
+    // give Thalia the top initiative so she is current
+    const thalia = s0.combat.combatants.find((c: { side: string }) => c.side === "pc");
+    const goblin = s0.combat.combatants.find((c: { side: string }) => c.side === "enemy");
+    await app.inject({ method: "POST", url: `/api/campaigns/${id}/combat/initiative`, payload: { values: [{ id: thalia.id, value: 20 }, { id: goblin.id, value: 1 }] } });
+    const res = await app.inject({ method: "POST", url: `/api/campaigns/${id}/combat/action`, payload: { actionType: "angriff", targetId: goblin.id } });
+    const state = res.json();
+    expect(res.statusCode).toBe(200);
+    expect(state.pendingDice).not.toBeNull();
+    expect(state.combat.turnPhase).toBe("ready"); // roll pending
+    // last player turn recorded the framed action
+    const lastPlayer = state.turns.filter((t: { role: string }) => t.role === "player").pop();
+    expect(lastPlayer.text).toContain("Angriff auf Goblin");
+    await app.close();
+  });
+
+  it("rejects /combat/action when it is not a PC's turn", async () => {
+    const combatCall: LlmCaller = async ({ system, messages }) => {
+      if (system.includes("Abenteuer-Architekt")) return fakePlanJson;
+      const last = messages[messages.length - 1];
+      if (last?.role === "user" && last.content.toLowerCase().includes("kampf beginnt")) {
+        return '{"narration":"Kampf!","diceRequest":null,"combat":{"event":"start","target":null,"amount":null,"enemies":[{"name":"Goblin","count":1,"hp":7}]}}';
+      }
+      return '{"narration":"…","diceRequest":null,"combat":null}';
+    };
+    const store = new CampaignStore(openDb(":memory:"));
+    const app = buildServer(combatCall, store);
+    const created = await createCampaignShell(app);
+    const id = created.campaign.id;
+    await app.inject({ method: "POST", url: `/api/campaigns/${id}/characters`, payload: { name: "Thalia", concept: "Magierin", maxHp: 12 } });
+    await app.inject({ method: "POST", url: `/api/campaigns/${id}/action`, payload: { text: "Kampf beginnt" } });
+    const s0 = (await app.inject({ method: "GET", url: `/api/campaigns/${id}/state` })).json();
+    const thalia = s0.combat.combatants.find((c: { side: string }) => c.side === "pc");
+    const goblin = s0.combat.combatants.find((c: { side: string }) => c.side === "enemy");
+    // goblin acts first → PC action must 409
+    await app.inject({ method: "POST", url: `/api/campaigns/${id}/combat/initiative`, payload: { values: [{ id: goblin.id, value: 20 }, { id: thalia.id, value: 1 }] } });
+    const res = await app.inject({ method: "POST", url: `/api/campaigns/${id}/combat/action`, payload: { actionType: "angriff", targetId: goblin.id } });
+    expect(res.statusCode).toBe(409);
+    await app.close();
+  });
 });
