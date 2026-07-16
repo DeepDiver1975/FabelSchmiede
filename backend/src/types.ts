@@ -129,6 +129,8 @@ export type CharacterInput = {
 
 export type CombatPhase = "rolling-initiative" | "in-turns";
 
+export type CombatTurnPhase = "ready" | "acted";
+
 export type Combatant = {
   id: string;
   name: string;
@@ -144,6 +146,7 @@ export type CombatState = {
   phase: CombatPhase;
   combatants: Combatant[];
   turnIndex: number;
+  turnPhase: CombatTurnPhase;
 };
 
 export type CombatEvent =

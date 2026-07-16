@@ -123,3 +123,21 @@ describe("currentCombatant", () => {
     expect(currentCombatant(s)).toBeNull();
   });
 });
+
+describe("turnPhase", () => {
+  it("start seeds turnPhase ready", () => {
+    const s = applyCombatEvent(null, { event: "start", enemies: [{ name: "Goblin", count: 1, hp: 7 }] }, pcs)!;
+    expect(s.turnPhase).toBe("ready");
+  });
+  it("submitInitiative sets turnPhase ready", () => {
+    const s = applyCombatEvent(null, { event: "start", enemies: [{ name: "Goblin", count: 1, hp: 7 }] }, pcs)!;
+    const r = submitInitiative(s, s.combatants.map((c) => ({ id: c.id, value: 10 })));
+    expect(r.turnPhase).toBe("ready");
+  });
+  it("advanceTurn resets turnPhase to ready", () => {
+    let s = applyCombatEvent(null, { event: "start", enemies: [{ name: "Goblin", count: 1, hp: 7 }] }, pcs)!;
+    s = submitInitiative(s, s.combatants.map((c) => ({ id: c.id, value: 10 })));
+    s = { ...s, turnPhase: "acted" };
+    expect(advanceTurn(s).turnPhase).toBe("ready");
+  });
+});

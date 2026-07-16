@@ -43,6 +43,7 @@ export function applyCombatEvent(
       phase: "rolling-initiative",
       combatants: [...pcs.map(pcCombatant), ...expandEnemies(event.enemies)],
       turnIndex: 0,
+      turnPhase: "ready",
     };
   }
   if (event.event === "end") return null;
@@ -74,7 +75,7 @@ export function submitInitiative(
     .map((c) => (byId.has(c.id) ? { ...c, initiative: byId.get(c.id)! } : c))
     .slice()
     .sort((a, b) => (b.initiative ?? 0) - (a.initiative ?? 0));
-  return { ...state, combatants, phase: "in-turns", turnIndex: 0 };
+  return { ...state, combatants, phase: "in-turns", turnIndex: 0, turnPhase: "ready" };
 }
 
 // Advance to the next non-defeated combatant, wrapping around the order. If
@@ -85,9 +86,9 @@ export function advanceTurn(state: CombatState): CombatState {
   if (n === 0) return state;
   for (let step = 1; step <= n; step++) {
     const idx = (state.turnIndex + step) % n;
-    if (!state.combatants[idx].defeated) return { ...state, turnIndex: idx };
+    if (!state.combatants[idx].defeated) return { ...state, turnIndex: idx, turnPhase: "ready" };
   }
-  return { ...state, turnIndex: (state.turnIndex + 1) % n };
+  return { ...state, turnIndex: (state.turnIndex + 1) % n, turnPhase: "ready" };
 }
 
 // Whose turn is it? Null until initiative has been rolled (turns phase).

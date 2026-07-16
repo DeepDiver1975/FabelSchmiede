@@ -227,6 +227,7 @@ describe("renderCombat", () => {
       { id: "goblin-1", name: "Goblin 1", side: "enemy", maxHp: 7, hp: 0, initiative: 12, defeated: true },
     ],
     turnIndex: 0,
+    turnPhase: "ready",
   };
 
   it("returns empty string when no combat", () => {

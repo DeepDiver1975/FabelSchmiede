@@ -283,6 +283,7 @@ describe("CampaignStore combat", () => {
         { id: "goblin-1", name: "Goblin 1", side: "enemy" as const, maxHp: 7, hp: 7, initiative: null, defeated: false },
       ],
       turnIndex: 0,
+      turnPhase: "ready" as const,
     };
     store.saveCombat(c.id, state);
     expect(store.getCombat(c.id)).toEqual(state);
