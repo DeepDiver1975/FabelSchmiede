@@ -283,6 +283,17 @@ export function buildServer(
     const combat = store.getCombat(req.params.id);
     if (!combat || combat.phase !== "in-turns")
       return reply.code(409).send({ error: "Es läuft gerade kein Kampf mit Zugreihenfolge." });
+    const enemiesLeft = combat.combatants.some((c) => c.side === "enemy" && !c.defeated);
+    const pcsLeft = combat.combatants.some((c) => c.side === "pc" && !c.defeated);
+    if (!enemiesLeft || !pcsLeft) {
+      // Terminal: ask the GM to narrate the conclusion and emit {event:"end"},
+      // which applyCombatEvent turns into a cleared combat. Manual "Kampf
+      // beenden" remains the fallback if the model forgets the end event.
+      const text = !enemiesLeft
+        ? "[Kampf — alle Gegner sind besiegt. Beschreibe kurz den Ausgang und beende den Kampf.]"
+        : "[Kampf — die Gruppe ist besiegt. Beschreibe kurz den Ausgang und beende den Kampf.]";
+      return play(req.params.id, text, "story", reply);
+    }
     store.saveCombat(req.params.id, advanceTurn(combat));
     return stateOf(req.params.id);
   });

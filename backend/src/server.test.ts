@@ -669,6 +669,41 @@ describe("server", () => {
     expect(res.json().combat.turnPhase).toBe("acted");
     await app.close();
   });
+
+  it("advance ends combat and asks for a closing narration when no enemies remain", async () => {
+    const combatCall: LlmCaller = async ({ system, messages }) => {
+      if (system.includes("Abenteuer-Architekt")) return fakePlanJson;
+      const last = messages[messages.length - 1];
+      if (last?.role === "user" && last.content.toLowerCase().includes("kampf beginnt")) {
+        return '{"narration":"Kampf!","diceRequest":null,"combat":{"event":"start","target":null,"amount":null,"enemies":[{"name":"Goblin","count":1,"hp":7}]}}';
+      }
+      if (last?.role === "user" && last.content.includes("alle Gegner sind besiegt")) {
+        return '{"narration":"Der letzte Goblin fällt. Stille kehrt ein.","diceRequest":null,"combat":{"event":"end","target":null,"amount":null,"enemies":null}}';
+      }
+      return '{"narration":"…","diceRequest":null,"combat":null}';
+    };
+    const store = new CampaignStore(openDb(":memory:"));
+    const app = buildServer(combatCall, store);
+    const created = await createCampaignShell(app);
+    const id = created.campaign.id;
+    await app.inject({ method: "POST", url: `/api/campaigns/${id}/characters`, payload: { name: "Thalia", concept: "Magierin", maxHp: 12 } });
+    await app.inject({ method: "POST", url: `/api/campaigns/${id}/action`, payload: { text: "Kampf beginnt" } });
+    const s0 = (await app.inject({ method: "GET", url: `/api/campaigns/${id}/state` })).json();
+    const thalia = s0.combat.combatants.find((c: { side: string }) => c.side === "pc");
+    const goblin = s0.combat.combatants.find((c: { side: string }) => c.side === "enemy");
+    await app.inject({ method: "POST", url: `/api/campaigns/${id}/combat/initiative`, payload: { values: [{ id: thalia.id, value: 20 }, { id: goblin.id, value: 1 }] } });
+    // defeat the goblin directly by injecting a combat event through a normal turn
+    // (simulate the killing blow having landed): mark it defeated via the store
+    const c = store.getCombat(id)!;
+    store.saveCombat(id, { ...c, combatants: c.combatants.map((x) => (x.id === goblin.id ? { ...x, hp: 0, defeated: true } : x)) });
+    const res = await app.inject({ method: "POST", url: `/api/campaigns/${id}/combat/advance` });
+    const state = res.json();
+    expect(res.statusCode).toBe(200);
+    expect(state.combat).toBeNull(); // end event cleared combat
+    const lastGm = state.turns.filter((t: { role: string }) => t.role === "gm").pop();
+    expect(lastGm.text).toContain("Stille");
+    await app.close();
+  });
 });
 
 describe("turn audio endpoint", () => {
