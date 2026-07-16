@@ -822,4 +822,35 @@ describe("turn audio endpoint", () => {
     expect(res.statusCode).toBe(409);
     await app.close();
   });
+
+  it("plays an enemy turn via /combat/play-enemy", async () => {
+    const combatCall: LlmCaller = async ({ system, messages }) => {
+      if (system.includes("Abenteuer-Architekt")) return fakePlanJson;
+      const last = messages[messages.length - 1];
+      if (last?.role === "user" && last.content.toLowerCase().includes("kampf beginnt")) {
+        return '{"narration":"Kampf!","diceRequest":null,"combat":{"event":"start","target":null,"amount":null,"enemies":[{"name":"Goblin","count":1,"hp":7}]}}';
+      }
+      if (last?.role === "user" && last.content.includes("Zug von Goblin")) {
+        return '{"narration":"Der Goblin greift Thalia an.","diceRequest":{"reason":"Angriff","hint":"W20"},"combat":null}';
+      }
+      return '{"narration":"…","diceRequest":null,"combat":null}';
+    };
+    const store = new CampaignStore(openDb(":memory:"));
+    const app = buildServer(combatCall, store);
+    const created = await createCampaignShell(app);
+    const id = created.campaign.id;
+    await app.inject({ method: "POST", url: `/api/campaigns/${id}/characters`, payload: { name: "Thalia", concept: "Magierin", maxHp: 12 } });
+    await app.inject({ method: "POST", url: `/api/campaigns/${id}/action`, payload: { text: "Kampf beginnt" } });
+    const s0 = (await app.inject({ method: "GET", url: `/api/campaigns/${id}/state` })).json();
+    const thalia = s0.combat.combatants.find((c: { side: string }) => c.side === "pc");
+    const goblin = s0.combat.combatants.find((c: { side: string }) => c.side === "enemy");
+    await app.inject({ method: "POST", url: `/api/campaigns/${id}/combat/initiative`, payload: { values: [{ id: goblin.id, value: 20 }, { id: thalia.id, value: 1 }] } });
+    const res = await app.inject({ method: "POST", url: `/api/campaigns/${id}/combat/play-enemy` });
+    const state = res.json();
+    expect(res.statusCode).toBe(200);
+    expect(state.pendingDice).not.toBeNull();
+    const lastPlayer = state.turns.filter((t: { role: string }) => t.role === "player").pop();
+    expect(lastPlayer.text).toContain("Zug von Goblin");
+    await app.close();
+  });
 });

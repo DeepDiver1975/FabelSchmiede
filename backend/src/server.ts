@@ -318,6 +318,18 @@ export function buildServer(
     },
   );
 
+  app.post<{ Params: { id: string } }>("/api/campaigns/:id/combat/play-enemy", async (req, reply) => {
+    const campaign = store.getCampaign(req.params.id);
+    if (!campaign) return reply.code(404).send({ error: "Kampagne nicht gefunden." });
+    const combat = store.getCombat(req.params.id);
+    if (!combat || combat.phase !== "in-turns")
+      return reply.code(409).send({ error: "Es läuft gerade kein Kampf mit Zugreihenfolge." });
+    const current = currentCombatant(combat);
+    if (!current || current.side !== "enemy" || combat.turnPhase === "acted")
+      return reply.code(409).send({ error: "Es ist gerade kein Gegner am Zug." });
+    return play(req.params.id, describeEnemyTurn(current.name), "story", reply);
+  });
+
   app.post<{ Params: { id: string } }>("/api/campaigns/:id/finish", async (req, reply) => {
     const campaign = store.getCampaign(req.params.id);
     if (!campaign) return reply.code(404).send({ error: "Kampagne nicht gefunden." });
