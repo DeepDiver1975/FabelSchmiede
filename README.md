@@ -1,30 +1,63 @@
 # Fabelschmiede — dein KI-Spielleiter
 
-An AI game master ("Spielleiter") for a German fantasy tabletop scene (D&D
-5e-style rules): Claude narrates via AWS Bedrock, you roll your own physical
-dice. The name means "Fable Forge" — where the stories are forged.
+[![CI](https://github.com/DeepDiver1975/FabelSchmiede/actions/workflows/ci.yml/badge.svg)](https://github.com/DeepDiver1975/FabelSchmiede/actions/workflows/ci.yml)
 
-## Prerequisites
-- Node 20+
-- AWS account with Bedrock access to `anthropic.claude-opus-4-8` in your region
+An AI game master ("Spielleiter") for German-language D&D 5e-style tabletop
+sessions, powered by **NVIDIA NIM** — sign up free at
+[build.nvidia.com](https://build.nvidia.com), no AWS account required. Claude
+narrates, a deterministic rule engine enforces the mechanics, you roll your
+own physical dice. The name means "Fable Forge" — where the stories are
+forged.
 
-## Setup
+## Features
+- **German-only Spielleiter** — narrates exclusively in natural modern
+  German, in character, with distinct NPC voices.
+- **Rules before vibes** — a small deterministic rule engine
+  (`backend/src/ruleEngine.ts`) is the sole authority on ability, level, and
+  resource-slot legality; the LLM narrates outcomes but never decides what's
+  legal.
+- **Physical dice, always** — the app never rolls for you; it asks for your
+  result and narrates from there.
+- **Spoken narration (optional)** — GM narration read aloud in a German voice
+  via NVIDIA NIM Magpie TTS.
+- **Single-screen play** — everyone plays pass-and-play on one browser tab.
+
+## Quick start (NVIDIA NIM — recommended)
 ```bash
-cp .env.example .env    # fill in AWS_REGION + credentials
+cp .env.example .env    # fill in NVIDIA_API_KEY
 npm install
 npm run dev             # backend on :8787, frontend on :5173
 ```
-No AWS account? Set `LLM_PROVIDER=nim` and `NVIDIA_API_KEY` in `.env` instead,
-using a free API key from [build.nvidia.com](https://build.nvidia.com).
-Open the frontend URL (printed by Vite) in a browser. Everyone plays on the one screen.
+In `.env`, set:
+```
+LLM_PROVIDER=nim
+NVIDIA_API_KEY=your-free-key-from-build.nvidia.com
+```
+`NIM_MODEL` defaults to `meta/llama-3.3-70b-instruct` and rarely needs
+changing. Open the frontend URL printed by Vite in a browser — that's it.
+
+### Alternatives
+Already have Anthropic or AWS credentials? Set one of these in `.env` instead
+(`LLM_PROVIDER` picks explicitly; if left unset, Anthropic takes precedence,
+then Bedrock):
+- **Anthropic API directly** — `ANTHROPIC_API_KEY`.
+- **AWS Bedrock** — `AWS_REGION` (needs access to
+  `us.anthropic.claude-opus-4-8` in that region).
 
 ## German storytelling voice (optional)
-Set `TTS_PROVIDER=nim` in `.env` (reusing the same free `NVIDIA_API_KEY`) to
-have the GM's narration spoken aloud in a German voice via NVIDIA NIM Magpie
-TTS. A 🔊/🔇 toggle in play mutes it for the table; each new narration
-autoplays and every line has a ▶ replay button. Leave `TTS_PROVIDER` unset for
-text-only.
+Set `TTS_PROVIDER=nim` in `.env` (reusing the same `NVIDIA_API_KEY`) to have
+the GM's narration spoken aloud in German via NVIDIA NIM Magpie TTS. A 🔊/🔇
+toggle in play mutes it for the table; each new narration autoplays and every
+line has a ▶ replay button. Leave `TTS_PROVIDER` unset for text-only.
+
+## Built for D&D
+Fabelschmiede is built for D&D 5e-style play, not a generic multi-system
+engine — the campaign prompts, tone, and rule engine are all shaped around
+it. We're actively deepening this: more D&D-specific mechanics and
+SRD-grounded content are on the roadmap, moving well past today's
+lightweight ability/level/resource model.
 
 ## Notes
-- State is in memory. Refresh = restart the scene.
+- Campaign state is persisted to a local SQLite database (`data/campaigns.db`)
+  — refreshing or restarting the server picks up right where you left off.
 - The app never rolls dice — it asks you for the result.
