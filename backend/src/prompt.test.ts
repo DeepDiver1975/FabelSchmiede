@@ -63,10 +63,14 @@ describe("buildSystemPrompt", () => {
     expect(Array.isArray(parsed.combat.enemies)).toBe(true);
   });
 
-  it("includes the combat-turn rule (resolve one turn, one roll, damage event, end)", () => {
+  it("includes the combat-turn rule (one roll per action, resolve outcome, damage event, end)", () => {
     const p = buildSystemPrompt("Goblins im Nebelwald");
     expect(p).toContain("KAMPF-ZUG");
-    expect(p).toContain("höchstens EINEN Wurf");
+    // an action needs exactly one roll; on the result, resolve the outcome and
+    // finish — no second (damage) roll, no re-narrating the setup.
+    expect(p).toContain("GENAU EINEN Wurf");
+    expect(p).toContain("separaten Schadenswurf"); // no second (damage) roll
+    expect(p).toContain("Würfelergebnis");
     expect(p).toContain('{event:"damage"');
     expect(p).toContain('{event:"end"}');
   });

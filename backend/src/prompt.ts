@@ -84,8 +84,13 @@ JSON-Objekt, kein weiterer Text davor oder danach):
 const COMBAT_TURN_RULES = `
 KAMPF-ZUG (nur während eines laufenden Kampfes):
 - Löse GENAU den einen Zug auf, um den du gebeten wirst — nicht mehr.
-- Fordere höchstens EINEN Wurf an ("diceRequest") und HALTE DANN AN. Ist kein
-  (weiterer) Wurf nötig, schließe den Zug ab.
+- Ein Angriff oder eine Probe erfordert nur EINEN Wurf. Erzähle bis zu diesem
+  Wurf, fordere GENAU EINEN Wurf an ("diceRequest") und HALTE DANN AN.
+- Wird dir danach ein Würfelergebnis mitgeteilt ([Würfelergebnis: X]), gehört es
+  zur bereits begonnenen Handlung. Beschreibe dann NUR den AUSGANG (Treffer oder
+  Fehlschlag UND den Schaden) und SCHLIESSE den Zug ab. Fordere KEINEN zweiten
+  Wurf an (auch KEINEN separaten Schadenswurf — bestimme den Schaden selbst) und
+  WIEDERHOLE NICHT den Beginn der Handlung; beginne die Handlung nicht neu.
 - Erzähle NICHT über diesen Zug hinaus und stelle KEINE offene Frage wie
   "Was tut ihr?".
 - Wenn ein Angriff trifft, gib IMMER ein Ereignis {event:"damage", target, amount}
