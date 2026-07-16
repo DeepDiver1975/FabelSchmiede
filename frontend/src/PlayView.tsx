@@ -160,7 +160,7 @@ function CombatPanel({
                   <button
                     key={type}
                     className={picked === type ? "active" : ""}
-                    onClick={() => { setPicked(type); setTargetId(null); }}
+                    onClick={() => { setPicked(type); setTargetId(null); setDetail(""); }}
                     disabled={busy}
                   >
                     {label}
