@@ -74,6 +74,7 @@ export type CombatState = {
   phase: "rolling-initiative" | "in-turns";
   combatants: Combatant[];
   turnIndex: number;
+  turnPhase: "ready" | "acted";
 };
 
 export type State = {
@@ -129,4 +130,7 @@ export const api = {
     req<State>(`/api/campaigns/${id}/combat/initiative`, "POST", { values }),
   advanceTurn: (id: string) => req<State>(`/api/campaigns/${id}/combat/advance`, "POST"),
   endCombat: (id: string) => req<State>(`/api/campaigns/${id}/combat/end`, "POST"),
+  combatAction: (id: string, body: { actionType: string; targetId?: string; detail?: string }) =>
+    req<State>(`/api/campaigns/${id}/combat/action`, "POST", body),
+  playEnemy: (id: string) => req<State>(`/api/campaigns/${id}/combat/play-enemy`, "POST"),
 };
