@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { applyCombatEvent, submitInitiative, advanceTurn, currentCombatant } from "./combat.js";
+import { applyCombatEvent, submitInitiative, advanceTurn, currentCombatant, describeCombatAction, describeEnemyTurn } from "./combat.js";
 import type { CombatState, PcSeed } from "./types.js";
 
 const pcs: PcSeed[] = [
@@ -139,5 +139,26 @@ describe("turnPhase", () => {
     s = submitInitiative(s, s.combatants.map((c) => ({ id: c.id, value: 10 })));
     s = { ...s, turnPhase: "acted" };
     expect(advanceTurn(s).turnPhase).toBe("ready");
+  });
+});
+
+describe("combat turn framing", () => {
+  it("frames a PC attack with a target", () => {
+    expect(describeCombatAction("Thalia", "angriff", "Goblin 2", null)).toBe(
+      "[Kampf — Thalias Zug: Angriff auf Goblin 2]",
+    );
+  });
+  it("frames an ability with detail and no target", () => {
+    expect(describeCombatAction("Bragok", "faehigkeit", null, "Heiliger Segen")).toBe(
+      "[Kampf — Bragoks Zug: Fähigkeit — Heiliger Segen]",
+    );
+  });
+  it("falls back to a generic label for unknown action types", () => {
+    expect(describeCombatAction("X", "unknown", null, null)).toBe("[Kampf — Xs Zug: Aktion]");
+  });
+  it("frames an enemy turn asking the GM to play it", () => {
+    const t = describeEnemyTurn("Goblin 2");
+    expect(t).toContain("Zug von Goblin 2");
+    expect(t).toContain("Spiele diesen Gegner");
   });
 });

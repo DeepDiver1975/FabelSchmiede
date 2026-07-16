@@ -96,3 +96,31 @@ export function currentCombatant(state: CombatState): Combatant | null {
   if (state.phase !== "in-turns") return null;
   return state.combatants[state.turnIndex] ?? null;
 }
+
+const ACTION_LABELS: Record<string, string> = {
+  angriff: "Angriff",
+  faehigkeit: "Fähigkeit",
+  bewegung: "Bewegung",
+  ausweichen: "Ausweichen",
+  anderes: "Aktion",
+};
+
+// Frame a PC's structured turn as the user message handed to the GM. The GM
+// resolves this one action (see COMBAT_TURN_RULES in prompt.ts).
+export function describeCombatAction(
+  pcName: string,
+  actionType: string,
+  targetName: string | null,
+  detail: string | null,
+): string {
+  const label = ACTION_LABELS[actionType] ?? "Aktion";
+  let s = `[Kampf — ${pcName}s Zug: ${label}`;
+  if (targetName) s += ` auf ${targetName}`;
+  if (detail && detail.trim()) s += ` — ${detail.trim()}`;
+  return s + "]";
+}
+
+// Frame an enemy's turn: ask the GM to play the monster with narrative freedom.
+export function describeEnemyTurn(enemyName: string): string {
+  return `[Kampf — Zug von ${enemyName}. Spiele diesen Gegner: wähle eine sinnvolle Handlung (Angriff auf eine Figur, Rückzug, Ruf nach Verstärkung …), beschreibe sie und fordere ggf. genau einen Wurf an.]`;
+}
