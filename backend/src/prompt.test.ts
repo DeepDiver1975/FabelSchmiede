@@ -89,6 +89,35 @@ describe("buildSystemPrompt", () => {
   it("keeps the combat-turn rule out of the aside prompt", () => {
     expect(buildAsideSystemPrompt("Goblins im Nebelwald")).not.toContain("KAMPF-ZUG");
   });
+
+  it("includes the narrative-restraint and storytelling-style rules", () => {
+    const p = buildSystemPrompt("Goblins im Nebelwald");
+    expect(p).toContain("SPIELERKONTROLLE");
+    expect(p).toContain("SIMULATION VOR DRAMA");
+    expect(p).toContain("ERZÄHLSTIL");
+  });
+
+  it("tells the GM to withhold NPC names until the party learns them in-fiction", () => {
+    // The Weltenbibel hands the model every NPC's canonical name; without this
+    // rule the narrator uses them before the party has earned them (e.g. naming
+    // the innkeeper "Greta" in the first reply). The rule must reach the story
+    // prompt AND the opening.
+    for (const p of [
+      buildSystemPrompt("Goblins im Nebelwald"),
+      buildOpeningSystemPrompt("Goblins im Nebelwald"),
+    ]) {
+      expect(p).toContain("NAMEN UND WISSEN DER GRUPPE");
+    }
+  });
+
+  it("tells NPCs to stay reticent and not volunteer plot/offers unprompted", () => {
+    for (const p of [
+      buildSystemPrompt("Goblins im Nebelwald"),
+      buildOpeningSystemPrompt("Goblins im Nebelwald"),
+    ]) {
+      expect(p).toContain("NSC-VERHALTEN");
+    }
+  });
 });
 
 describe("buildOpeningSystemPrompt", () => {
@@ -96,6 +125,12 @@ describe("buildOpeningSystemPrompt", () => {
     const p = buildOpeningSystemPrompt("Ein Raumhafen auf dem Mars");
     expect(p).toContain("Eröffnungsszene");
     expect(p).toContain("Ein Raumhafen auf dem Mars");
+  });
+
+  it("includes the narrative-restraint and storytelling-style rules", () => {
+    const p = buildOpeningSystemPrompt("Ein Raumhafen auf dem Mars");
+    expect(p).toContain("SPIELERKONTROLLE");
+    expect(p).toContain("ERZÄHLSTIL");
   });
 });
 
@@ -156,6 +191,21 @@ describe("buildAsideSystemPrompt", () => {
     const asidePrompt = buildAsideSystemPrompt("Goblins im Nebelwald");
     expect(asidePrompt).not.toBe(storyPrompt);
     expect(asidePrompt.toLowerCase()).toContain("immer auf null");
+  });
+
+  it("includes the storytelling-style rules but not the narrative-restraint rules", () => {
+    const p = buildAsideSystemPrompt("Goblins im Nebelwald");
+    expect(p).toContain("ERZÄHLSTIL");
+    expect(p).not.toContain("SPIELERKONTROLLE");
+  });
+
+  it("does not carry the name-withholding or NPC-restraint rules", () => {
+    // Asides are meta questions; the aside rules explicitly allow inventing and
+    // naming NPCs on demand ("Wie heißt der Wirt?"). The narration-time
+    // withholding rules must not leak in and block that.
+    const p = buildAsideSystemPrompt("Goblins im Nebelwald");
+    expect(p).not.toContain("NAMEN UND WISSEN DER GRUPPE");
+    expect(p).not.toContain("NSC-VERHALTEN");
   });
 });
 
