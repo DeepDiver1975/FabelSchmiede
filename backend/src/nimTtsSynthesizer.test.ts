@@ -16,4 +16,17 @@ describe("createNimTtsSynthesizer", () => {
     });
     expect(typeof synth).toBe("function");
   });
+
+  it("rejects text over Magpie's 2000-char input limit with a clear message, before any network call", async () => {
+    // Magpie caps INPUT text at 2000 chars regardless of streaming; SynthesizeOnline
+    // only streams the audio OUTPUT. Sending more yields an opaque Triton gRPC error,
+    // so guard up front with a message that names the limit and the actual length.
+    const synth = createNimTtsSynthesizer("test-key", {
+      voice: "Magpie-Multilingual.DE-DE.Pascal",
+      languageCode: "de-DE",
+      functionId: "877104f7-e885-42b9-8de8-f6e4c6303969",
+      sampleRate: 44100,
+    });
+    await expect(synth("a".repeat(2001))).rejects.toThrow(/2001.*2000|2000.*2001|Zeichen/);
+  });
 });

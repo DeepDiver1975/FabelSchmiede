@@ -46,6 +46,9 @@ REGELN FÜR DICH:
   aufbauend. Widersprich niemals einem bereits mitgeteilten Ergebnis.
 - Gliedere längeren Erzähltext in kurze Absätze, getrennt durch eine Leerzeile
   (höchstens etwa 3–4 Sätze pro Absatz), damit er gut lesbar bleibt.
+- Halte deinen Erzähltext insgesamt kompakt: höchstens etwa vier kurze Absätze
+  bzw. rund 1200 Zeichen. Fasse dich – ausschweifende Szenen ermüden am Tisch,
+  und überlange Antworten lassen sich nicht vorlesen.
 
 ANTWORTFORMAT:
 Antworte ausschließlich als JSON-Objekt mit den Feldern "narration" (dein

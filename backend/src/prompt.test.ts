@@ -18,6 +18,18 @@ describe("buildSystemPrompt", () => {
     expect(buildSystemPrompt("Goblins im Nebelwald")).toContain("Goblins im Nebelwald");
   });
 
+  it("caps overall narration length so turns stay readable and voiceable", () => {
+    // Both the gameplay and opening prompts share DICE_AND_FORMAT_RULES, so the
+    // compact-length instruction must reach both. 1200 chars keeps a comfortable
+    // margin under Magpie TTS's 2000-char input limit.
+    const gameplay = buildSystemPrompt("Goblins im Nebelwald").toLowerCase();
+    const opening = buildOpeningSystemPrompt("Goblins im Nebelwald").toLowerCase();
+    for (const p of [gameplay, opening]) {
+      expect(p).toContain("kompakt");
+      expect(p).toContain("1200 zeichen");
+    }
+  });
+
   it("instructs the GM to keep established names, places, and counts consistent", () => {
     const p = buildSystemPrompt("Goblins im Nebelwald").toLowerCase();
     expect(p).toContain("konsistent");

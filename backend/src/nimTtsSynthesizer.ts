@@ -10,6 +10,13 @@ const LINEAR_PCM = 1;
 // NVIDIA's hosted Riva TTS behind NVIDIA Cloud Functions (NVCF). The function-id
 // selects the Magpie multilingual model; the API key authorizes the call.
 const NVCF_HOST = "grpc.nvcf.nvidia.com:443";
+// The Magpie ensemble rejects any request whose INPUT text exceeds this many
+// characters ("Input text is larger than the maximum input length: N > 2000").
+// Streaming does not lift this cap — it only chunks the audio OUTPUT. Callers are
+// expected to keep narration well under it (see the length rule in prompt.ts);
+// this guard exists so an over-limit turn fails with a clear message instead of
+// an opaque Triton gRPC error.
+const MAGPIE_MAX_INPUT_CHARS = 2000;
 
 export type NimTtsOptions = {
   voice: string; // e.g. "Magpie-Multilingual.DE-DE.Pascal"
@@ -38,13 +45,23 @@ function loadClient(): SynthClient {
 }
 
 // Build a synthesizer backed by NVIDIA NIM Magpie TTS. Uses SynthesizeOnline
-// (server-streaming) so arbitrarily long narration is handled — the offline
-// mode caps ~20 s/call. Streamed PCM chunks are accumulated and wrapped as one
-// WAV blob, which is what the audio endpoint caches.
+// (server-streaming) so the audio OUTPUT streams back as PCM chunks — the offline
+// mode caps ~20 s/call. Note this does NOT lift the input-text cap: Magpie still
+// rejects any request whose text exceeds MAGPIE_MAX_INPUT_CHARS. Streamed PCM
+// chunks are accumulated and wrapped as one WAV blob, which the audio endpoint caches.
 export function createNimTtsSynthesizer(apiKey: string, opts: NimTtsOptions): TtsSynthesizer {
   const client = loadClient();
   return (text) =>
     new Promise((res, rej) => {
+      if (text.length > MAGPIE_MAX_INPUT_CHARS) {
+        rej(
+          new Error(
+            `Erzähltext zu lang für die Sprachausgabe: ${text.length} Zeichen ` +
+              `(Magpie erlaubt höchstens ${MAGPIE_MAX_INPUT_CHARS}).`,
+          ),
+        );
+        return;
+      }
       const md = new grpc.Metadata();
       md.set("function-id", opts.functionId);
       md.set("authorization", `Bearer ${apiKey}`);
