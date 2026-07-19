@@ -199,3 +199,43 @@ button:disabled { opacity: 0.5; cursor: default; }
   opacity: 0.5;
 }
 .turn-audio:hover { opacity: 1; }
+
+/* Combat panel */
+.combat-panel { border: 1px solid var(--border); border-left: 3px solid var(--ember); border-radius: 6px; padding: 0.75rem 1rem; margin: 0.75rem 0; background-image: var(--parchment); }
+.combat-panel h2 { margin: 0 0 0.5rem; font-size: 1.1rem; }
+.combat-hint { font-size: 0.9rem; opacity: 0.85; }
+.combat-init-list, .combat-order { list-style: none; margin: 0.25rem 0; padding: 0; }
+.combat-init-row, .combat-order-row { display: flex; align-items: center; gap: 0.75rem; padding: 0.25rem 0; }
+.combat-init-row .combat-name { flex: 1; }
+.combat-init-row input { width: 6rem; }
+.combat-order-row .combat-init { width: 2rem; text-align: right; font-variant-numeric: tabular-nums; opacity: 0.8; }
+.combat-order-row .combat-name { flex: 1; }
+.combat-order-row .combat-hp { font-variant-numeric: tabular-nums; }
+.combat-order-row.enemy .combat-name { color: #b4472e; }
+.combat-order-row.current { font-weight: 700; background: rgba(164, 121, 91, 0.15); border-radius: 4px; }
+.combat-order-row.defeated { opacity: 0.5; text-decoration: line-through; }
+.combat-actions { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+.party-hp { opacity: 0.75; }
+
+/* During combat the play screen becomes two columns: narration (left) + a
+   sticky combat tracker (right). Single reading column otherwise. */
+.app.app-combat { max-width: 1180px; display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 1.5rem; align-items: start; }
+.combat-sidebar { position: sticky; top: 1.5rem; }
+.combat-sidebar .combat-panel { margin-top: 0; }
+
+/* Narrow screens: stack, and pin the tracker to the top as a bar. */
+@media (max-width: 900px) {
+  .app.app-combat { grid-template-columns: 1fr; }
+  .combat-sidebar { order: -1; position: sticky; top: 0; z-index: 5; }
+}
+
+.setup-hint { opacity: 0.8; font-size: 0.92rem; margin: 0.5rem 0; }
+.begin-adventure { margin-top: 0.75rem; font-size: 1.05rem; padding: 0.6rem 1.1rem; }
+.begin-adventure:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.combat-turn-actions { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem; }
+.combat-action-buttons { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+.combat-action-buttons button.active { background: var(--ember); color: #fff; }
+.combat-order-row.targetable { cursor: pointer; outline: 1px dashed var(--border); }
+.combat-order-row.picked-target { outline: 2px solid var(--ember); }
+.combat-detail { display: block; margin-top: 0.25rem; width: 100%; }

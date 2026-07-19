@@ -18,6 +18,18 @@ describe("buildSystemPrompt", () => {
     expect(buildSystemPrompt("Goblins im Nebelwald")).toContain("Goblins im Nebelwald");
   });
 
+  it("caps overall narration length so turns stay readable and voiceable", () => {
+    // Both the gameplay and opening prompts share DICE_AND_FORMAT_RULES, so the
+    // compact-length instruction must reach both. 1200 chars keeps a comfortable
+    // margin under Magpie TTS's 2000-char input limit.
+    const gameplay = buildSystemPrompt("Goblins im Nebelwald").toLowerCase();
+    const opening = buildOpeningSystemPrompt("Goblins im Nebelwald").toLowerCase();
+    for (const p of [gameplay, opening]) {
+      expect(p).toContain("kompakt");
+      expect(p).toContain("1200 zeichen");
+    }
+  });
+
   it("instructs the GM to keep established names, places, and counts consistent", () => {
     const p = buildSystemPrompt("Goblins im Nebelwald").toLowerCase();
     expect(p).toContain("konsistent");
@@ -36,6 +48,46 @@ describe("buildSystemPrompt", () => {
   it("omits the opening section when no opening is given", () => {
     // A fresh campaign with no prior opening must not leave a dangling heading.
     expect(buildSystemPrompt("Goblins im Nebelwald")).not.toContain("BISHERIGER VERLAUF");
+  });
+
+  it("instructs the GM how to START combat via a combat start event", () => {
+    // Without this, the model never emits combat.start and the tracker never
+    // turns on. It must name the start event and tell the GM not to also ask
+    // for an initiative roll (the app collects those).
+    const p = buildSystemPrompt("Goblins im Nebelwald");
+    expect(p).toContain("KAMPF-BEGINN");
+    expect(p).toContain('"event":"start"');
+    expect(p).toContain("Initiative"); // app collects it; GM sets diceRequest null
+    expect(p).toContain("combat"); // combat field named in the response format
+  });
+
+  it("includes a one-shot example of a valid combat-start reply", () => {
+    // Smaller/local models (NIM) copy the exact envelope shape from an example
+    // far more reliably than from prose. The example must be a complete, valid
+    // GM reply (narration + diceRequest null + combat start) that parses.
+    const p = buildSystemPrompt("Goblins im Nebelwald");
+    expect(p).toContain("BEISPIEL");
+    const match = p.match(/\{"narration":.*"event":"start".*\}\}/);
+    expect(match).not.toBeNull();
+    const parsed = JSON.parse(match![0]);
+    expect(parsed.diceRequest).toBeNull();
+    expect(parsed.combat.event).toBe("start");
+    expect(Array.isArray(parsed.combat.enemies)).toBe(true);
+  });
+
+  it("includes the combat-turn rule (one roll per action, resolve outcome, damage event, end)", () => {
+    const p = buildSystemPrompt("Goblins im Nebelwald");
+    expect(p).toContain("KAMPF-ZUG");
+    // an action needs exactly one roll; on the result, resolve the outcome and
+    // finish — no second (damage) roll, no re-narrating the setup.
+    expect(p).toContain("GENAU EINEN Wurf");
+    expect(p).toContain("separaten Schadenswurf"); // no second (damage) roll
+    expect(p).toContain("Würfelergebnis");
+    expect(p).toContain('{event:"damage"');
+    expect(p).toContain('{event:"end"}');
+  });
+  it("keeps the combat-turn rule out of the aside prompt", () => {
+    expect(buildAsideSystemPrompt("Goblins im Nebelwald")).not.toContain("KAMPF-ZUG");
   });
 });
 
@@ -187,5 +239,33 @@ describe("renderPlan / plan in prompts", () => {
 
   it("the opening prompt includes the plan", () => {
     expect(buildOpeningSystemPrompt("Prämisse", undefined, samplePlan)).toContain("GEHEIM_ARC");
+  });
+});
+
+import { renderCombat } from "./prompt.js";
+import type { CombatState } from "./types.js";
+
+describe("renderCombat", () => {
+  const state: CombatState = {
+    active: true,
+    phase: "in-turns",
+    combatants: [
+      { id: "pc-1", name: "Thalia", side: "pc", maxHp: 12, hp: 7, initiative: 18, defeated: false },
+      { id: "goblin-1", name: "Goblin 1", side: "enemy", maxHp: 7, hp: 0, initiative: 12, defeated: true },
+    ],
+    turnIndex: 0,
+    turnPhase: "ready",
+  };
+
+  it("returns empty string when no combat", () => {
+    expect(renderCombat(null)).toBe("");
+  });
+
+  it("lists combatants with hp and marks the current turn", () => {
+    const out = renderCombat(state);
+    expect(out).toContain("Thalia");
+    expect(out).toContain("7/12");
+    expect(out).toContain("besiegt");
+    expect(out).toContain("AM ZUG: Thalia");
   });
 });

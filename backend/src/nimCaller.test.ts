@@ -42,7 +42,7 @@ describe("createNimCaller", () => {
         { role: "system", content: "system prompt" },
         { role: "user", content: "hello" },
       ],
-      max_tokens: 4000,
+      max_tokens: 8000,
     });
   });
 

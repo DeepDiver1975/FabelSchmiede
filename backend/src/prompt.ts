@@ -1,6 +1,7 @@
 import { SCENE_BRIEF } from "./scene.js";
 import { renderParty } from "./partyPrompt.js";
-import type { Character, CampaignPlan, Turn } from "./types.js";
+import { currentCombatant } from "./combat.js";
+import type { Character, CampaignPlan, CombatState, Turn } from "./types.js";
 
 const CONTINUITY_RULES = `
 KONSISTENZ (SEHR WICHTIG):
@@ -45,10 +46,61 @@ REGELN FÜR DICH:
   aufbauend. Widersprich niemals einem bereits mitgeteilten Ergebnis.
 - Gliedere längeren Erzähltext in kurze Absätze, getrennt durch eine Leerzeile
   (höchstens etwa 3–4 Sätze pro Absatz), damit er gut lesbar bleibt.
+- Halte deinen Erzähltext insgesamt kompakt: höchstens etwa vier kurze Absätze
+  bzw. rund 1200 Zeichen. Fasse dich – ausschweifende Szenen ermüden am Tisch,
+  und überlange Antworten lassen sich nicht vorlesen.
 
 ANTWORTFORMAT:
 Antworte ausschließlich als JSON-Objekt mit den Feldern "narration" (dein
-deutscher Erzähltext) und "diceRequest" (Objekt {reason, hint} oder null).
+deutscher Erzähltext), "diceRequest" (Objekt {reason, hint} oder null) und
+"combat" (Kampf-Ereignis oder null — siehe die Kampf-Regeln, sofern vorhanden).
+`.trim();
+
+// How the GM *begins* a combat. This must live in the base play prompt: the
+// detailed in-combat rules (renderCombat) only appear once a fight is already
+// active, so without this the model never emits the "start" event and the
+// code-side combat tracker never turns on. Initiative is collected by the app,
+// so the GM must NOT also ask for an initiative roll here.
+const COMBAT_START_RULES = `
+KAMPF-BEGINN (SEHR WICHTIG):
+- Wenn ein Kampf beginnt (die Gruppe greift an oder wird angegriffen), setze
+  das Feld "combat" auf ein Start-Ereignis, das die Gegner auflistet:
+  {"event":"start","enemies":[{"name":"Goblin","count":3,"hp":7}]}
+  Gib für jede Gegnerart den Namen ("name"), die Anzahl ("count") und die
+  Trefferpunkte pro Gegner ("hp") an. Schätze die Trefferpunkte passend zur
+  Gefährlichkeit (schwacher Gegner ~5–10, zäher Gegner ~15–30).
+- Setze in genau diesem Zug "diceRequest" auf null. Die Initiative würfelt die
+  Gruppe selbst über die App aus — fordere hier KEINEN Wurf an. Erzähle nur
+  atmosphärisch, dass der Kampf ausbricht, und HALTE DANN AN.
+- Läuft bereits ein Kampf (Abschnitt "KAMPF LÄUFT" oben), starte KEINEN neuen —
+  nutze stattdessen die dortigen Ereignisse (damage/heal/defeat/end).
+- In allen anderen Fällen (kein Kampf) setze "combat" auf null.
+
+BEISPIEL für den Beginn eines Kampfes — antworte GENAU in dieser Form (nur das
+JSON-Objekt, kein weiterer Text davor oder danach):
+{"narration":"Aus dem Unterholz brechen drei Goblins hervor, die rostigen Klingen gezückt, und ein hünenhafter Hobgoblin folgt ihnen mit einem heiseren Kriegsschrei.","diceRequest":null,"combat":{"event":"start","enemies":[{"name":"Goblin","count":3,"hp":7},{"name":"Hobgoblin","count":1,"hp":11}]}}
+`.trim();
+
+// How the GM plays a SINGLE combat turn once the fight is underway. The app
+// drives the turn loop and asks the GM to resolve exactly one combatant's turn;
+// these rules keep that turn discrete and keep HP in sync.
+const COMBAT_TURN_RULES = `
+KAMPF-ZUG (nur während eines laufenden Kampfes):
+- Löse GENAU den einen Zug auf, um den du gebeten wirst — nicht mehr.
+- Ein Angriff oder eine Probe erfordert nur EINEN Wurf. Erzähle bis zu diesem
+  Wurf, fordere GENAU EINEN Wurf an ("diceRequest") und HALTE DANN AN.
+- Wird dir danach ein Würfelergebnis mitgeteilt ([Würfelergebnis: X]), gehört es
+  zur bereits begonnenen Handlung. Beschreibe dann NUR den AUSGANG (Treffer oder
+  Fehlschlag UND den Schaden) und SCHLIESSE den Zug ab. Fordere KEINEN zweiten
+  Wurf an (auch KEINEN separaten Schadenswurf — bestimme den Schaden selbst) und
+  WIEDERHOLE NICHT den Beginn der Handlung; beginne die Handlung nicht neu.
+- Erzähle NICHT über diesen Zug hinaus und stelle KEINE offene Frage wie
+  "Was tut ihr?".
+- Wenn ein Angriff trifft, gib IMMER ein Ereignis {event:"damage", target, amount}
+  im Feld "combat" an. Bei Heilung {event:"heal", ...}, beim Ausschalten
+  {event:"defeat", target}.
+- Wirst du zum Abschluss des Kampfes aufgefordert (alle Gegner besiegt oder die
+  Gruppe besiegt), beschreibe kurz den Ausgang und sende {event:"end"}.
 `.trim();
 
 // The opening narration is a gm turn and is dropped from the message list
@@ -110,11 +162,45 @@ function planSection(plan: CampaignPlan | undefined): string {
   return rendered ? `\n\n${rendered}` : "";
 }
 
+// Combat is code-owned, mutable state (unlike the frozen plan). Re-inject the
+// current picture every turn so the model narrates against real HP and the real
+// turn order — and never invents them.
+export function renderCombat(state: CombatState | null): string {
+  if (!state || !state.active) return "";
+  const lines = state.combatants
+    .map((c) => {
+      const side = c.side === "pc" ? "Gruppe" : "Gegner";
+      const status = c.defeated ? "besiegt" : `${c.hp}/${c.maxHp} TP`;
+      const init = c.initiative === null ? "—" : String(c.initiative);
+      return `- ${c.name} (${side}): ${status}, Initiative ${init}`;
+    })
+    .join("\n");
+  const current = currentCombatant(state);
+  const turnLine =
+    state.phase === "in-turns" && current
+      ? `\nAM ZUG: ${current.name}`
+      : "\n(Die Initiative wird gerade ausgewürfelt.)";
+  return `
+KAMPF LÄUFT (verbindlicher Zustand — der Code führt Buch, nicht du):
+${lines}${turnLine}
+
+Erfinde keine Trefferpunkte und keine Reihenfolge. Wenn eine Handlung Schaden
+verursacht, Heilung bewirkt oder einen Gegner ausschaltet, gib dies über das
+Feld "combat" als Ereignis an (damage/heal/defeat). Endet der Kampf, sende das
+Ereignis "end".`.trim();
+}
+
+function combatSection(state: CombatState | undefined): string {
+  const rendered = renderCombat(state ?? null);
+  return rendered ? `\n\n${rendered}` : "";
+}
+
 export function buildSystemPrompt(
   premise: string,
   opening?: string,
   party?: Character[],
   plan?: CampaignPlan,
+  combat?: CombatState,
 ): string {
   return `
 Du bist der Spielleiter (Game Master).
@@ -122,9 +208,13 @@ Du bist der Spielleiter (Game Master).
 ${SCENE_BRIEF}
 
 SZENE DIESER KAMPAGNE:
-${premise}${openingSection(opening)}${partySection(party)}${planSection(plan)}
+${premise}${openingSection(opening)}${partySection(party)}${planSection(plan)}${combatSection(combat)}
 
 ${CONTINUITY_RULES}
+
+${COMBAT_START_RULES}
+
+${COMBAT_TURN_RULES}
 
 ${DICE_AND_FORMAT_RULES}
 `.trim();

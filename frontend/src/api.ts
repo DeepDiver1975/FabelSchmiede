@@ -42,6 +42,7 @@ export type Character = {
   name: string;
   concept: string;
   narrative?: CharacterNarrative;
+  maxHp?: number;
   created_at: string;
 };
 
@@ -50,6 +51,7 @@ export type CharacterInput = {
   name: string;
   concept: string;
   narrative?: CharacterNarrative;
+  maxHp?: number;
 };
 
 export type CampaignBrief = {
@@ -58,12 +60,30 @@ export type CampaignBrief = {
   locations: { name: string; description: string }[];
 };
 
+export type Combatant = {
+  id: string;
+  name: string;
+  side: "pc" | "enemy";
+  maxHp: number;
+  hp: number;
+  initiative: number | null;
+  defeated: boolean;
+};
+export type CombatState = {
+  active: boolean;
+  phase: "rolling-initiative" | "in-turns";
+  combatants: Combatant[];
+  turnIndex: number;
+  turnPhase: "ready" | "acted";
+};
+
 export type State = {
   campaign: Campaign;
   turns: Turn[];
   pendingDice: DiceRequest | null;
   characters: Character[];
   brief: CampaignBrief | null;
+  combat: CombatState | null;
   // Whether the server has a TTS voice configured (controls audio UI).
   ttsEnabled: boolean;
 };
@@ -87,6 +107,8 @@ export const api = {
   listCampaigns: () => req<CampaignSummary[]>("/api/campaigns", "GET"),
   createCampaign: (name: string, premise: string) =>
     req<State>("/api/campaigns", "POST", { name, premise }),
+  // Generate the opening scene once the party is set up (see SetupView).
+  begin: (id: string) => req<State>(`/api/campaigns/${id}/begin`, "POST"),
   getState: (id: string) => req<State>(`/api/campaigns/${id}/state`, "GET"),
   action: (id: string, text: string, kind: TurnKind = "story") =>
     req<State>(`/api/campaigns/${id}/action`, "POST", { text, kind }),
@@ -104,4 +126,11 @@ export const api = {
   // Relative URL (Vite proxies /api) for a gm turn's audio; usable directly as
   // an <audio> src. The backend synthesizes on first hit and caches.
   turnAudioUrl: (id: string, seq: number) => `/api/campaigns/${id}/turns/${seq}/audio`,
+  submitInitiative: (id: string, values: { id: string; value: number }[]) =>
+    req<State>(`/api/campaigns/${id}/combat/initiative`, "POST", { values }),
+  advanceTurn: (id: string) => req<State>(`/api/campaigns/${id}/combat/advance`, "POST"),
+  endCombat: (id: string) => req<State>(`/api/campaigns/${id}/combat/end`, "POST"),
+  combatAction: (id: string, body: { actionType: string; targetId?: string; detail?: string }) =>
+    req<State>(`/api/campaigns/${id}/combat/action`, "POST", body),
+  playEnemy: (id: string) => req<State>(`/api/campaigns/${id}/combat/play-enemy`, "POST"),
 };

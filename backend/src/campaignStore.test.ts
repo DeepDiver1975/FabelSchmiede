@@ -187,6 +187,16 @@ describe("CampaignStore", () => {
     expect(store.getCharacter(b.id)).not.toBeNull();
     expect(store.listCharacters(c.id).map((ch) => ch.name)).toEqual(["Zweite"]);
   });
+
+  it("round-trips a character's maxHp", () => {
+    const store = new CampaignStore(openDb(":memory:"));
+    const c = store.createCampaign("K", "P");
+    const created = store.createCharacter(c.id, { name: "Thalia", concept: "Magierin", maxHp: 12 });
+    expect(created.maxHp).toBe(12);
+    expect(store.getCharacter(created.id)!.maxHp).toBe(12);
+    store.updateCharacter({ ...created, maxHp: 20 });
+    expect(store.getCharacter(created.id)!.maxHp).toBe(20);
+  });
 });
 
 import type { CampaignPlan } from "./types.js";
@@ -258,5 +268,26 @@ describe("CampaignStore turn audio", () => {
     store.saveTurnAudio(c.id, 0, Buffer.from([2, 2]), "audio/wav", 2);
     const got = store.getTurnAudio(c.id, 0);
     expect(Buffer.compare(got!.audio, Buffer.from([2, 2]))).toBe(0);
+  });
+});
+
+describe("CampaignStore combat", () => {
+  it("saves, reads, and clears combat state", () => {
+    const store = new CampaignStore(openDb(":memory:"));
+    const c = store.createCampaign("K", "P");
+    expect(store.getCombat(c.id)).toBeNull();
+    const state = {
+      active: true,
+      phase: "rolling-initiative" as const,
+      combatants: [
+        { id: "goblin-1", name: "Goblin 1", side: "enemy" as const, maxHp: 7, hp: 7, initiative: null, defeated: false },
+      ],
+      turnIndex: 0,
+      turnPhase: "ready" as const,
+    };
+    store.saveCombat(c.id, state);
+    expect(store.getCombat(c.id)).toEqual(state);
+    store.clearCombat(c.id);
+    expect(store.getCombat(c.id)).toBeNull();
   });
 });

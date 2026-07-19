@@ -68,7 +68,7 @@ export function PickerView({
           rows={3}
         />
         <button onClick={create} disabled={busy}>
-          {busy ? "Der Spielleiter bereitet vor…" : "Kampagne beginnen"}
+          {busy ? "Der Spielleiter bereitet vor…" : "Kampagne anlegen"}
         </button>
       </section>
 

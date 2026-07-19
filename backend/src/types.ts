@@ -3,6 +3,7 @@ export type DiceRequest = { reason: string; hint: string };
 export type GmReply = {
   narration: string;
   diceRequest: DiceRequest | null;
+  combat: CombatEvent | null;
 };
 
 // Orthogonal to `role` (who is speaking): `kind` says whether a turn advances
@@ -103,6 +104,9 @@ export type Character = {
   concept: string;
   // Optional mechanical detail. Absent fields simply mean "not tracked yet".
   level?: number;
+  // Maximum hit points. Slice-1 combat tracking uses this to seed a PC's HP.
+  // Not a full sheet — a single forward-compatible number.
+  maxHp?: number;
   narrative?: CharacterNarrative;
   abilities?: Ability[];
   resources?: ResourcePool[];
@@ -115,9 +119,47 @@ export type CharacterInput = {
   name: string;
   concept: string;
   level?: number;
+  maxHp?: number;
   narrative?: CharacterNarrative;
   abilities?: Ability[];
   resources?: ResourcePool[];
+};
+
+// --- Combat ---------------------------------------------------------------
+
+export type CombatPhase = "rolling-initiative" | "in-turns";
+
+export type CombatTurnPhase = "ready" | "acted";
+
+export type Combatant = {
+  id: string;
+  name: string;
+  side: "pc" | "enemy";
+  maxHp: number;
+  hp: number;
+  initiative: number | null;
+  defeated: boolean;
+};
+
+export type CombatState = {
+  active: boolean;
+  phase: CombatPhase;
+  combatants: Combatant[];
+  turnIndex: number;
+  turnPhase: CombatTurnPhase;
+};
+
+export type CombatEvent =
+  | { event: "start"; enemies: { name: string; count: number; hp: number }[] }
+  | { event: "damage"; target: string; amount: number }
+  | { event: "heal"; target: string; amount: number }
+  | { event: "defeat"; target: string }
+  | { event: "end" };
+
+export type PcSeed = {
+  id: string;
+  name: string;
+  maxHp: number;
 };
 
 // JSON Schema for Bedrock structured output (output_config.format).
@@ -125,7 +167,7 @@ export type CharacterInput = {
 export const GM_REPLY_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["narration", "diceRequest"],
+  required: ["narration", "diceRequest", "combat"],
   properties: {
     narration: { type: "string" },
     diceRequest: {
@@ -137,6 +179,39 @@ export const GM_REPLY_SCHEMA = {
           properties: {
             reason: { type: "string" },
             hint: { type: "string" },
+          },
+        },
+        { type: "null" },
+      ],
+    },
+    combat: {
+      anyOf: [
+        {
+          type: "object",
+          additionalProperties: false,
+          required: ["event", "target", "amount", "enemies"],
+          properties: {
+            event: { enum: ["start", "damage", "heal", "defeat", "end"] },
+            target: { anyOf: [{ type: "string" }, { type: "null" }] },
+            amount: { anyOf: [{ type: "number" }, { type: "null" }] },
+            enemies: {
+              anyOf: [
+                {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    additionalProperties: false,
+                    required: ["name", "count", "hp"],
+                    properties: {
+                      name: { type: "string" },
+                      count: { type: "number" },
+                      hp: { type: "number" },
+                    },
+                  },
+                },
+                { type: "null" },
+              ],
+            },
           },
         },
         { type: "null" },

@@ -59,4 +59,22 @@ describe("db", () => {
     expect(count).toBe(1);
     db.close();
   });
+
+  it("gives characters a max_hp column", () => {
+    const db = openDb(":memory:");
+    const cols = (db.prepare("SELECT name FROM pragma_table_info('characters')").all() as { name: string }[]).map(
+      (r) => r.name,
+    );
+    expect(cols).toContain("max_hp");
+    db.close();
+  });
+
+  it("creates the combats table", () => {
+    const db = openDb(":memory:");
+    const names = (db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as { name: string }[]).map(
+      (r) => r.name,
+    );
+    expect(names).toContain("combats");
+    db.close();
+  });
 });

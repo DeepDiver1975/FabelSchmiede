@@ -2,16 +2,12 @@ import { useState, useEffect, useRef } from "react";
 import {
   api,
   type State,
-  type Character,
   type CharacterInput,
-  type CharacterNarrative,
-  type CampaignBrief,
+  type CombatState,
+  type DiceRequest,
 } from "./api.js";
+import { PartyPanel } from "./PartyPanel.js";
 import { splitParagraphs } from "./prose.js";
-
-type CharacterForm = { id?: string; name: string; concept: string; narrative: CharacterNarrative };
-
-const emptyForm: CharacterForm = { name: "", concept: "", narrative: {} };
 
 function CampaignBriefPanel({ brief }: { brief: State["brief"] }) {
   const [open, setOpen] = useState(false);
@@ -40,208 +36,163 @@ function CampaignBriefPanel({ brief }: { brief: State["brief"] }) {
   );
 }
 
-function cleanNarrative(n: CharacterNarrative): CharacterNarrative {
-  const entries = Object.entries(n).filter(([, v]) => v?.trim());
-  return Object.fromEntries(entries);
-}
-
-function PartyPanel({
-  characters,
-  readOnly,
-  onCreate,
-  onUpdate,
-  onDelete,
-}: {
-  characters: Character[];
-  readOnly: boolean;
-  onCreate: (input: CharacterInput) => Promise<boolean>;
-  onUpdate: (cid: string, patch: CharacterInput) => Promise<boolean>;
-  onDelete: (cid: string) => Promise<void>;
-}) {
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState<CharacterForm | null>(null);
-  const [moreDetails, setMoreDetails] = useState(false);
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-
-  function startAdd() {
-    setForm({ ...emptyForm });
-    setMoreDetails(false);
-  }
-
-  function startEdit(c: Character) {
-    setForm({ id: c.id, name: c.name, concept: c.concept, narrative: { ...c.narrative } });
-    setMoreDetails(true);
-  }
-
-  async function submit() {
-    if (!form) return;
-    const name = form.name.trim();
-    const concept = form.concept.trim();
-    if (!name || !concept) return;
-    const cleaned = cleanNarrative(form.narrative);
-    let ok: boolean;
-    if (form.id) {
-      // Edit always submits the complete current narrative (even {}), so a
-      // cleared field actually clears on the server (PATCH replaces wholesale).
-      ok = await onUpdate(form.id, { name, concept, narrative: cleaned });
-    } else {
-      const input: CharacterInput = { name, concept };
-      if (Object.keys(cleaned).length > 0) input.narrative = cleaned;
-      ok = await onCreate(input);
-    }
-    if (ok) setForm(null);
-  }
-
-  function setNarrativeField(key: keyof CharacterNarrative, value: string) {
-    setForm((f) => (f ? { ...f, narrative: { ...f.narrative, [key]: value } } : f));
-  }
-
-  return (
-    <section className="party-panel">
-      <button className="party-toggle" onClick={() => setOpen((o) => !o)}>
-        {open ? "▾" : "▸"} Gruppe ({characters.length})
-      </button>
-      {open && (
-        <div className="party-body">
-          <ul className="party-list">
-            {characters.map((c) => (
-              <li key={c.id} className="party-member">
-                <div className="party-member-head">
-                  <span>
-                    <strong>{c.name}</strong> — {c.concept}
-                  </span>
-                  {!readOnly && (
-                    <span className="party-member-actions">
-                      <button onClick={() => startEdit(c)}>Bearbeiten</button>
-                      <button
-                        onClick={() => {
-                          if (confirm(`${c.name} wirklich entfernen?`)) onDelete(c.id);
-                        }}
-                      >
-                        Entfernen
-                      </button>
-                    </span>
-                  )}
-                </div>
-                {c.narrative && Object.keys(c.narrative).length > 0 && (
-                  <button
-                    className="party-member-expand"
-                    onClick={() => setExpanded((e) => ({ ...e, [c.id]: !e[c.id] }))}
-                  >
-                    {expanded[c.id] ? "Details verbergen" : "Details anzeigen"}
-                  </button>
-                )}
-                {expanded[c.id] && c.narrative && (
-                  <dl className="party-narrative">
-                    {c.narrative.personality && (
-                      <>
-                        <dt>Wesenszug</dt>
-                        <dd>{c.narrative.personality}</dd>
-                      </>
-                    )}
-                    {c.narrative.ideal && (
-                      <>
-                        <dt>Ideal</dt>
-                        <dd>{c.narrative.ideal}</dd>
-                      </>
-                    )}
-                    {c.narrative.bond && (
-                      <>
-                        <dt>Bindung</dt>
-                        <dd>{c.narrative.bond}</dd>
-                      </>
-                    )}
-                    {c.narrative.flaw && (
-                      <>
-                        <dt>Makel</dt>
-                        <dd>{c.narrative.flaw}</dd>
-                      </>
-                    )}
-                    {c.narrative.appearance && (
-                      <>
-                        <dt>Aussehen</dt>
-                        <dd>{c.narrative.appearance}</dd>
-                      </>
-                    )}
-                    {c.narrative.backstory && (
-                      <>
-                        <dt>Hintergrund</dt>
-                        <dd>{c.narrative.backstory}</dd>
-                      </>
-                    )}
-                  </dl>
-                )}
-              </li>
-            ))}
-          </ul>
-
-          {!readOnly && !form && <button onClick={startAdd}>Charakter hinzufügen</button>}
-
-          {!readOnly && form && (
-            <div className="party-form">
-              <input
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="Name"
-              />
-              <input
-                value={form.concept}
-                onChange={(e) => setForm({ ...form, concept: e.target.value })}
-                placeholder="Konzept (z. B. Zwergischer Krieger)"
-              />
-              <button type="button" onClick={() => setMoreDetails((m) => !m)}>
-                {moreDetails ? "Weniger Details" : "Mehr Details"}
-              </button>
-              {moreDetails && (
-                <>
-                  <textarea
-                    value={form.narrative.personality ?? ""}
-                    onChange={(e) => setNarrativeField("personality", e.target.value)}
-                    placeholder="Wesenszug"
-                  />
-                  <textarea
-                    value={form.narrative.ideal ?? ""}
-                    onChange={(e) => setNarrativeField("ideal", e.target.value)}
-                    placeholder="Ideal"
-                  />
-                  <textarea
-                    value={form.narrative.bond ?? ""}
-                    onChange={(e) => setNarrativeField("bond", e.target.value)}
-                    placeholder="Bindung"
-                  />
-                  <textarea
-                    value={form.narrative.flaw ?? ""}
-                    onChange={(e) => setNarrativeField("flaw", e.target.value)}
-                    placeholder="Makel"
-                  />
-                  <textarea
-                    value={form.narrative.appearance ?? ""}
-                    onChange={(e) => setNarrativeField("appearance", e.target.value)}
-                    placeholder="Aussehen"
-                  />
-                  <textarea
-                    value={form.narrative.backstory ?? ""}
-                    onChange={(e) => setNarrativeField("backstory", e.target.value)}
-                    placeholder="Hintergrund"
-                  />
-                </>
-              )}
-              <div className="party-form-actions">
-                <button onClick={submit}>Speichern</button>
-                <button onClick={() => setForm(null)}>Abbrechen</button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-    </section>
-  );
-}
-
 type PendingTurn = { kind: "action" | "roll" | "aside"; text: string; failed: boolean };
 
 function pendingTurnText(t: PendingTurn): string {
   return t.kind === "roll" ? `[Würfelergebnis: ${t.text}]` : t.text;
+}
+
+function CombatPanel({
+  combat,
+  busy,
+  pending,
+  onSubmitInitiative,
+  onAction,
+  onPlayEnemy,
+  onAdvance,
+  onEnd,
+}: {
+  combat: CombatState;
+  busy: boolean;
+  pending: DiceRequest | null;
+  onSubmitInitiative: (values: { id: string; value: number }[]) => void;
+  onAction: (body: { actionType: string; targetId?: string; detail?: string }) => void;
+  onPlayEnemy: () => void;
+  onAdvance: () => void;
+  onEnd: () => void;
+}) {
+  const [rolls, setRolls] = useState<Record<string, string>>({});
+  const [picked, setPicked] = useState<string | null>(null); // chosen actionType
+  const [targetId, setTargetId] = useState<string | null>(null);
+  const [detail, setDetail] = useState("");
+  const rolling = combat.phase === "rolling-initiative";
+  const allFilled = combat.combatants.every((c) => {
+    const v = rolls[c.id];
+    return v !== undefined && v.trim() !== "" && Number.isFinite(Number(v));
+  });
+  const current = combat.combatants[combat.turnIndex];
+  const acted = combat.turnPhase === "acted";
+  const NEEDS_TARGET = new Set(["angriff", "faehigkeit", "anderes"]);
+
+  function sendAction() {
+    if (!picked) return;
+    const body: { actionType: string; targetId?: string; detail?: string } = { actionType: picked };
+    if (targetId) body.targetId = targetId;
+    if (detail.trim()) body.detail = detail.trim();
+    onAction(body);
+    setPicked(null);
+    setTargetId(null);
+    setDetail("");
+  }
+
+  return (
+    <section className="combat-panel">
+      <h2>
+        ⚔️ Kampf
+        {combat.phase === "in-turns" && current && ` — Am Zug: ${current.name}`}
+      </h2>
+      {rolling ? (
+        <>
+          <p className="combat-hint">Initiative auswürfeln — für jede Figur einen W20 werfen (Gegner würfelt die SL):</p>
+          <ul className="combat-init-list">
+            {combat.combatants.map((c) => (
+              <li key={c.id} className={`combat-init-row ${c.side}`}>
+                <span className="combat-name">{c.name}</span>
+                <input
+                  type="number"
+                  value={rolls[c.id] ?? ""}
+                  onChange={(e) => setRolls((r) => ({ ...r, [c.id]: e.target.value }))}
+                  placeholder="Initiative"
+                  disabled={busy}
+                />
+              </li>
+            ))}
+          </ul>
+          <button
+            onClick={() => onSubmitInitiative(combat.combatants.map((c) => ({ id: c.id, value: Number(rolls[c.id]) })))}
+            disabled={busy || !allFilled}
+          >
+            Alle senden
+          </button>
+        </>
+      ) : (
+        <>
+          <ol className="combat-order">
+            {combat.combatants.map((c, i) => (
+              <li
+                key={c.id}
+                className={`combat-order-row ${c.side}${c.defeated ? " defeated" : ""}${i === combat.turnIndex ? " current" : ""}${picked && NEEDS_TARGET.has(picked) && !acted && !pending ? " targetable" : ""}${targetId === c.id ? " picked-target" : ""}`}
+                onClick={() => {
+                  if (picked && NEEDS_TARGET.has(picked) && !acted && !pending && !c.defeated) setTargetId(c.id);
+                }}
+              >
+                <span className="combat-init">{c.initiative ?? "—"}</span>
+                <span className="combat-name">{c.name}</span>
+                <span className="combat-hp">{c.defeated ? "besiegt" : `${c.hp}/${c.maxHp} TP`}</span>
+              </li>
+            ))}
+          </ol>
+
+          {/* The turn UI is derived: a pending roll wins; else the current
+              combatant's side + turnPhase decide what to show. */}
+          {pending ? (
+            <p className="combat-hint">Wurf nötig — Ergebnis unten eingeben.</p>
+          ) : acted ? (
+            <div className="combat-actions">
+              <button onClick={onAdvance} disabled={busy}>▶ Nächster Zug</button>
+              <button onClick={onEnd} disabled={busy}>Kampf beenden</button>
+            </div>
+          ) : current && current.side === "enemy" ? (
+            <div className="combat-actions">
+              <button onClick={onPlayEnemy} disabled={busy}>▶ {current.name} spielen</button>
+              <button onClick={onEnd} disabled={busy}>Kampf beenden</button>
+            </div>
+          ) : (
+            <div className="combat-turn-actions">
+              <div className="combat-action-buttons">
+                {[
+                  ["angriff", "Angriff"],
+                  ["faehigkeit", "Fähigkeit"],
+                  ["bewegung", "Bewegung"],
+                  ["ausweichen", "Ausweichen"],
+                  ["anderes", "Anderes"],
+                ].map(([type, label]) => (
+                  <button
+                    key={type}
+                    className={picked === type ? "active" : ""}
+                    onClick={() => { setPicked(type); setTargetId(null); setDetail(""); }}
+                    disabled={busy}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {picked && NEEDS_TARGET.has(picked) && (
+                <p className="combat-hint">
+                  {picked === "angriff" ? "Ziel in der Liste antippen." : "Optional ein Ziel antippen."}
+                  {picked !== "angriff" && (
+                    <input
+                      className="combat-detail"
+                      value={detail}
+                      onChange={(e) => setDetail(e.target.value)}
+                      placeholder="Was genau? (z. B. Feuerball)"
+                      disabled={busy}
+                    />
+                  )}
+                </p>
+              )}
+              <button
+                onClick={sendAction}
+                disabled={busy || !picked || (picked === "angriff" && !targetId)}
+              >
+                Handeln
+              </button>
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  );
 }
 
 export function PlayView({
@@ -338,6 +289,63 @@ export function PlayView({
     }
   }
 
+  async function submitInitiative(values: { id: string; value: number }[]) {
+    setBusy(true);
+    setError(null);
+    try {
+      setState(await api.submitInitiative(id, values));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function advanceTurn() {
+    setBusy(true);
+    setError(null);
+    try {
+      setState(await api.advanceTurn(id));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function endCombat() {
+    if (!confirm("Kampf wirklich beenden?")) return;
+    setBusy(true);
+    setError(null);
+    try {
+      setState(await api.endCombat(id));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function combatAction(body: { actionType: string; targetId?: string; detail?: string }) {
+    setBusy(true);
+    setError(null);
+    try {
+      setState(await api.combatAction(id, body));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function playEnemy() {
+    setBusy(true);
+    setError(null);
+    try {
+      setState(await api.playEnemy(id));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function submitAction() {
     if (!input.trim()) return;
     const text = input;
@@ -407,7 +415,8 @@ export function PlayView({
   }, [state.turns]);
 
   return (
-    <main className="app">
+    <main className={`app${state.combat?.active ? " app-combat" : ""}`}>
+      <div className="play-main">
       <header>
         <h1>{state.campaign.name}</h1>
         <div className="header-actions">
@@ -489,7 +498,13 @@ export function PlayView({
 
       {pending ? (
         <section className="dice">
-          <p><strong>Wurf nötig:</strong> {pending.reason} ({pending.hint})</p>
+          <p>
+            <strong>Wurf nötig:</strong>{" "}
+            {state.combat?.phase === "in-turns" && state.combat.combatants[state.combat.turnIndex]
+              ? `${state.combat.combatants[state.combat.turnIndex].name}: `
+              : ""}
+            {pending.reason} ({pending.hint})
+          </p>
           <input
             value={roll}
             onChange={(e) => setRoll(e.target.value)}
@@ -499,6 +514,27 @@ export function PlayView({
             autoFocus
           />
           <button onClick={submitRoll} disabled={busy}>Ergebnis senden</button>
+        </section>
+      ) : state.combat?.active && state.combat.phase === "in-turns" ? (
+        <section className="action">
+          <button
+            type="button"
+            className={`aside-toggle${asideMode ? " active" : ""}`}
+            onClick={() => setAsideMode((a) => !a)}
+            disabled={busy}
+            title="Nachfragen, ohne die Geschichte fortzusetzen"
+          >
+            ❓
+          </button>
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && submitAction()}
+            placeholder="Übrigens, frag nach etwas zur Spielwelt…"
+            disabled={busy || !asideMode}
+            autoFocus
+          />
+          <button onClick={submitAction} disabled={busy || !asideMode}>Fragen</button>
         </section>
       ) : (
         <section className="action">
@@ -521,6 +557,22 @@ export function PlayView({
           />
           <button onClick={submitAction} disabled={busy}>{asideMode ? "Fragen" : "Handeln"}</button>
         </section>
+      )}
+      </div>
+
+      {state.combat?.active && (
+        <aside className="combat-sidebar">
+          <CombatPanel
+            combat={state.combat}
+            busy={busy}
+            pending={pending}
+            onSubmitInitiative={submitInitiative}
+            onAction={combatAction}
+            onPlayEnemy={playEnemy}
+            onAdvance={advanceTurn}
+            onEnd={endCombat}
+          />
+        </aside>
       )}
     </main>
   );
