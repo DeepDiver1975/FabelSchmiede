@@ -18,6 +18,23 @@ const NVCF_HOST = "grpc.nvcf.nvidia.com:443";
 // an opaque Triton gRPC error.
 const MAGPIE_MAX_INPUT_CHARS = 2000;
 
+// Magpie produces garbled audio around raw en-dash (U+2013) and em-dash (U+2014)
+// characters. German narration emits them constantly — as a Gedankenstrich (a
+// spaced clause break) and in number ranges like "Stufe 1–3" — so rewrite them
+// into speakable equivalents before synthesis. ASCII hyphens in compounds
+// ("Dungeons-und-Dragons") are handled fine by Magpie and left alone.
+export function sanitizeForTts(text: string): string {
+  return text
+    // Number range: "1–3" / "1 – 3" → "1 bis 3".
+    .replace(/(\d)\s*[–—]\s*(\d)/g, "$1 bis $2")
+    // Spaced clause-break dash → comma pause: "… – …" → "…, …".
+    .replace(/\s+[–—]\s+/g, ", ")
+    // Any remaining en/em dash (word-internal or trailing) → ASCII hyphen.
+    .replace(/[–—]/g, "-")
+    // Collapse any doubled spaces the rewrites may have introduced.
+    .replace(/ {2,}/g, " ");
+}
+
 export type NimTtsOptions = {
   voice: string; // e.g. "Magpie-Multilingual.DE-DE.Pascal"
   languageCode: string; // e.g. "de-DE"
@@ -51,8 +68,11 @@ function loadClient(): SynthClient {
 // chunks are accumulated and wrapped as one WAV blob, which the audio endpoint caches.
 export function createNimTtsSynthesizer(apiKey: string, opts: NimTtsOptions): TtsSynthesizer {
   const client = loadClient();
-  return (text) =>
+  return (rawText) =>
     new Promise((res, rej) => {
+      // Strip characters Magpie mispronounces before the length check, so the
+      // guard and charCount reflect exactly what goes on the wire.
+      const text = sanitizeForTts(rawText);
       if (text.length > MAGPIE_MAX_INPUT_CHARS) {
         rej(
           new Error(
