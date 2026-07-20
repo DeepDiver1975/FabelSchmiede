@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@anthropic-ai/bedrock-sdk": "^0.32.0",
-    "@anthropic-ai/sdk": "^0.111.0",
+    "@anthropic-ai/sdk": "^0.112.3",
     "@fastify/cors": "^11.3.0",
     "@grpc/grpc-js": "^1.14.4",
     "@grpc/proto-loader": "^0.8.1",
